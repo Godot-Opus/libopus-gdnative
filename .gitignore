@@ -1,0 +1,7 @@
+bu
+cmake-build-debug
+*.dblite
+*.idb
+bin
+.idea
+*.o

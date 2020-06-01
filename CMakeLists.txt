@@ -1,0 +1,23 @@
+cmake_minimum_required(VERSION 3.15)
+project(opus_gdnative CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+
+include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
+conan_basic_setup()
+include_directories(godot-cpp)
+include_directories(godot-cpp/godot_headers)
+include_directories(godot-cpp/godot_headers/android)
+include_directories(godot-cpp/godot_headers/arvr)
+include_directories(godot-cpp/godot_headers/gdnative)
+include_directories(godot-cpp/godot_headers/nativescript)
+include_directories(godot-cpp/godot_headers/net)
+include_directories(godot-cpp/godot_headers/pluginscript)
+include_directories(godot-cpp/godot_headers/videodecoder)
+include_directories(godot-cpp/include)
+include_directories(godot-cpp/include/core)
+include_directories(godot-cpp/include/gen)
+include_directories(src)
+
+add_library(opus_gdnative src/OpusEncoderNode.cpp src/OpusEncoderNode.h src/init.cpp src/OpusDecoderNode.cpp src/OpusDecoderNode.h src/Values.h)
+target_link_libraries(opus_gdnative ${CONAN_LIBS})
