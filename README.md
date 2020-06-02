@@ -1,4 +1,4 @@
-# opus-gdnative
+# libOpus-gdnative
 GDnative integration of libOpus for Godot
 
 ## So far this is only proof of concept quality, and is in no way ready to be used in production.
