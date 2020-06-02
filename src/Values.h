@@ -11,11 +11,16 @@ constexpr int DEFAULT_SAMPLE_RATE = 48000;
 constexpr int DEFAULT_BITRATE = 64000;
 constexpr int DEFAULT_CHANNELS = 2;
 
-union Bytes
+union Bytes4
 {
-	int integer;
-	uint8_t bytes[4];
+	opus_int32 integer;
+	unsigned char bytes[4];
 };
 
+union Bytes2
+{
+	opus_int16 integer;
+	unsigned char bytes[2];
+};
 
 #endif //OPUS_GDNATIVE_VALUES_H
