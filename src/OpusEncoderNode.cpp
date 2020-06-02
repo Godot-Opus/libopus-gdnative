@@ -21,7 +21,7 @@ OpusEncoderNode::~OpusEncoderNode()
 
 void OpusEncoderNode::_init()
 {
-	application = OPUS_APPLICATION_AUDIO;
+	application = OPUS_APPLICATION_VOIP;
 	sample_rate = DEFAULT_SAMPLE_RATE;
 	bit_rate = DEFAULT_BITRATE;
 	channels = DEFAULT_CHANNELS;
@@ -36,7 +36,7 @@ void OpusEncoderNode::_ready()
 
 	frame_size = sample_rate / 50;
 	max_frame_size = frame_size * 6;
-	Godot::print("sample_rate: {0} channels: {1}", sample_rate, channels);
+
 	/*Create a new encoder state */
 	encoder = opus_encoder_create(sample_rate, channels, application, &err);
 	if(err < 0)
@@ -50,16 +50,24 @@ void OpusEncoderNode::_ready()
 		Godot::print(String().format("failed to set bitrate: {0}\n", opus_strerror(err)));
 	}
 
-	decoder = opus_decoder_create(sample_rate, channels, &err);
-	if(err < 0)
+	/*
+	err = opus_encoder_ctl(encoder, OPUS_SET_FORCE_CHANNELS(1));
+	if (err<0)
 	{
-		Godot::print("failed to create decoder: {0}\n", opus_strerror(err));
+		Godot::print(String().format("failed to set force mono: {0}\n", opus_strerror(err)));
 	}
-	else
+	*/
+}
+
+void OpusEncoderNode::_exit_tree()
+{
+	if(encoder != nullptr)
 	{
-		Godot::print("Decoder created successfully\n");
+		opus_encoder_destroy(encoder);
+		encoder = nullptr;
 	}
 }
+
 
 inline double lerp(double v0, double v1, double t) {
 	return (1.0 - t) * v0 + t * v1;
@@ -133,14 +141,13 @@ PoolByteArray OpusEncoderNode::encode(const PoolByteArray &rawPcm)
 {
 	PoolByteArray encodedBytes;
 
-	PoolByteArray upsampled = resample_441kh_48kh(rawPcm);
-	//PoolByteArray upsampled = rawPcm;
+	//PoolByteArray upsampled = resample_441kh_48kh(rawPcm);
+	PoolByteArray upsampled = rawPcm;
 
 	const int numPcmBytes = upsampled.size();
 	const unsigned char *pcm_bytes = upsampled.read().ptr();
 
 	const int bytesPerSample = pcm_channel_size * channels;
-	Godot::print("bytes per sample: {0}", bytesPerSample);
 
 	opus_int16 *inputSamples = new opus_int16[frame_size * channels];
 
@@ -204,21 +211,16 @@ PoolByteArray OpusEncoderNode::encode(const PoolByteArray &rawPcm)
 	delete[] inputSamples;
 	delete[] outBuff;
 
-	Godot::print("Total Encoded size: {0}", encodedBytes.size());
-
 	return encodedBytes;
 }
 
 void OpusEncoderNode::_register_methods()
 {
-	register_property<OpusEncoderNode, int>("application", &OpusEncoderNode::application, OPUS_APPLICATION_VOIP);
-	register_property<OpusEncoderNode, int>("sample_rate", &OpusEncoderNode::sample_rate, DEFAULT_SAMPLE_RATE);
-	//register_property<OpusEncoderNode, int>("bit_rate", &OpusEncoderNode::bit_rate, DEFAULT_BITRATE);
-	register_property<OpusEncoderNode, int>("channels", &OpusEncoderNode::channels, DEFAULT_CHANNELS);
-
+	register_property<OpusEncoderNode, int>("bit_rate", &OpusEncoderNode::bit_rate, DEFAULT_BITRATE);
 
 	register_method("_init", &OpusEncoderNode::_init);
 	register_method("_ready", &OpusEncoderNode::_ready);
-	register_method("resample_441kh_48kh", &OpusEncoderNode::resample_441kh_48kh);
+	register_method("_exit_tree", &OpusEncoderNode::_exit_tree);
+	//register_method("resample_441kh_48kh", &OpusEncoderNode::resample_441kh_48kh);
 	register_method("encode", &OpusEncoderNode::encode);
 }

@@ -17,26 +17,26 @@ namespace opus
 		GODOT_CLASS(OpusEncoderNode, godot::Node)
 
 		OpusEncoder *encoder = nullptr;
-		OpusDecoder *decoder = nullptr;
 
 		/**
 		 * Size of each PCM frame in number of samples
 		 */
 		int frame_size;
-
-	public:
 		int application;
 		int sample_rate;
 		int pcm_channel_size;
-		int bit_rate;
 		int channels;
 		int max_frame_size;
+
+	public:
+		int bit_rate;
 
 		OpusEncoderNode();
 		~OpusEncoderNode();
 
 		void _init();
 		void _ready();
+		void _exit_tree();
 
 		godot::PoolByteArray resample_441kh_48kh(const godot::PoolByteArray &rawPcm);
 		godot::PoolByteArray encode(const godot::PoolByteArray& rawPcm);

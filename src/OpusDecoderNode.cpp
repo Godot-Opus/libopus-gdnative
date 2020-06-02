@@ -9,7 +9,6 @@ using namespace std;
 using namespace opus;
 using namespace godot;
 
-
 OpusDecoderNode::OpusDecoderNode() = default;
 OpusDecoderNode::~OpusDecoderNode() = default;
 
@@ -25,8 +24,6 @@ void OpusDecoderNode::_init()
 
 void OpusDecoderNode::_ready()
 {
-	Godot::print("sample_rate: {0} channels: {1}", sample_rate, channels);
-
 	frame_size = sample_rate / 50; // We want a 20ms window
 	max_frame_size = frame_size * 6;
 
@@ -36,15 +33,19 @@ void OpusDecoderNode::_ready()
 	{
 		Godot::print("failed to create decoder: {0}\n", opus_strerror(err));
 	}
-	else
+}
+
+void OpusDecoderNode::_exit_tree()
+{
+	if(decoder != nullptr)
 	{
-		Godot::print("Decoder created successfully\n");
+		opus_decoder_destroy(decoder);
+		decoder = nullptr;
 	}
 }
 
 PoolByteArray OpusDecoderNode::decode(const PoolByteArray &opusEncoded)
 {
-	Godot::print("Decoding...");
 	PoolByteArray decodedPcm;
 
 	int numInputBytes = opusEncoded.size();
@@ -107,11 +108,8 @@ PoolByteArray OpusDecoderNode::decode(const PoolByteArray &opusEncoded)
 
 void OpusDecoderNode::_register_methods()
 {
-	register_property<OpusDecoderNode, int>("sample_rate", &OpusDecoderNode::sample_rate, DEFAULT_SAMPLE_RATE);
-	register_property<OpusDecoderNode, int>("channels", &OpusDecoderNode::channels, DEFAULT_CHANNELS);
-
 	register_method("_init", &OpusDecoderNode::_init);
 	register_method("_ready", &OpusDecoderNode::_ready);
-
+	register_method("_exit_tree", &OpusDecoderNode::_exit_tree);
 	register_method("decode", &OpusDecoderNode::decode);
 }

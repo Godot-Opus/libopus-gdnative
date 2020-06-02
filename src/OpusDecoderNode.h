@@ -29,6 +29,7 @@ namespace opus
 
 		void _init();
 		void _ready();
+		void _exit_tree();
 
 		godot::PoolByteArray decode(const godot::PoolByteArray& opusEncoded);
 
