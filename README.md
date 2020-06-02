@@ -3,7 +3,7 @@ GDnative integration of libOpus for Godot
 
 ## So far this is only proof of concept quality, and is in no way ready to be used in production.
 
-One key component Godot is missing for enabling VOIP features, is a, audio code that can be used at run-time to compress and decompress audio for transmission.
+One key component Godot is missing for enabling VOIP features, is an audio code that can be used at run-time to compress and decompress audio for transmission.
 
 libOpus is the gold standard for open source real-time voice codecs.
 
