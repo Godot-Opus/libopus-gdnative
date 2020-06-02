@@ -237,11 +237,11 @@ PoolByteArray OpusEncoderNode::encode(const PoolByteArray &rawPcm)
 
 		markPos += (curFrameSize * channels * pcm_channel_size);
 
-		Godot::print("--------------------");
-		for(int ii=0; ii<10; ++ii)
-		{
-			Godot::print("in: {0}", inputSamples[ii]);
-		}
+//		Godot::print("--------------------");
+//		for(int ii=0; ii<10; ++ii)
+//		{
+//			Godot::print("in: {0}", inputSamples[ii]);
+//		}
 
 //		for(int ii=0; ii<500; ++ii)
 //		{
@@ -256,35 +256,35 @@ PoolByteArray OpusEncoderNode::encode(const PoolByteArray &rawPcm)
 			break;
 		}
 
-		int out_frame_size = opus_decode(decoder, outBuff, opusPacketSize, out2, max_frame_size, 0);
-		if(out_frame_size < 0)
-		{
-			Godot::print("decoder failed: {0}", opus_strerror(out_frame_size));
-			break;
-		}
+//		int out_frame_size = opus_decode(decoder, outBuff, opusPacketSize, out2, max_frame_size, 0);
+//		if(out_frame_size < 0)
+//		{
+//			Godot::print("decoder failed: {0}", opus_strerror(out_frame_size));
+//			break;
+//		}
 
 		//Godot::print("out_frame_size: {0}", out_frame_size);
 
 		// Convert to little-endian ordering.
-		for(int i=0;i<channels*out_frame_size;i++)
-		{
-			outBuff3[2*i]=out2[i]&0xFF;
-			outBuff3[2*i+1]=(out2[i]>>8)&0xFF;
-		}
-
-		for(int ii=0; ii<10; ++ii)
-		{
-			Godot::print("out: {0}", out2[ii]);
-		}
-		Godot::print("--------------------");
+//		for(int i=0;i<channels*out_frame_size;i++)
+//		{
+//			outBuff3[2*i]=out2[i]&0xFF;
+//			outBuff3[2*i+1]=(out2[i]>>8)&0xFF;
+//		}
+//
+//		for(int ii=0; ii<10; ++ii)
+//		{
+//			Godot::print("out: {0}", out2[ii]);
+//		}
+//		Godot::print("--------------------");
 
 		//unsigned char *x = reinterpret_cast<unsigned char *>(out2);
-		for(int ii = 0; ii < out_frame_size*channels*pcm_channel_size; ++ii)
-		{
-			encodedBytes.append(outBuff3[ii]);
-		}
+//		for(int ii = 0; ii < out_frame_size*channels*pcm_channel_size; ++ii)
+//		{
+//			encodedBytes.append(outBuff3[ii]);
+//		}
 
-		/*
+
 		// Prepend the frame size
 		//Godot::print("Encode packetSize: {0}", opusPacketSize);
 		Bytes4 b{opusPacketSize};
@@ -296,7 +296,7 @@ PoolByteArray OpusEncoderNode::encode(const PoolByteArray &rawPcm)
 		{
 			encodedBytes.append(outBuff[ii]);
 		}
-		*/
+
 
 		// Record that we've processed how ever many frames we processed
 		remainingSamples -= curFrameSize;
