@@ -74,15 +74,16 @@ elif env['platform'] == "windows":
     # that way you can run scons in a vs 2017 prompt and it will find all the required tools
     env.Append(ENV=os.environ)
 
-    env.Append(CPPDEFINES=['WIN32', '_WIN32', '_WINDOWS', '_CRT_SECURE_NO_WARNINGS'])
+    env.Append(CPPDEFINES=['WIN32', '_WIN32', '_WINDOWS', '_CRT_SECURE_NO_WARNINGS', 'OPUS_BUILD', 'DLL_EXPORT'])
     env.Append(CCFLAGS=['-W3', '-GR', '/std:c++17'])
     if env['target'] in ('debug', 'd'):
         env.Append(CPPDEFINES=['_DEBUG'])
         env.Append(CCFLAGS=['-EHsc', '-MDd', '-ZI'])
-        env.Append(LINKFLAGS=['-DEBUG'])
+        env.Append(LINKFLAGS=['-DEBUG', 'opus.lib'])
     else:
         env.Append(CPPDEFINES=['NDEBUG'])
         env.Append(CCFLAGS=['-EHsc', '-MD', '-O2'])
+        env.Append(LINKFLAGS=['-NDEBUG','opus.lib'])
 
 if env['target'] in ('debug', 'd'):
     cpp_library += '.debug'
