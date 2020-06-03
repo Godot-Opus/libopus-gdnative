@@ -82,7 +82,7 @@ elif env['platform'] == "windows":
         env.Append(LINKFLAGS=['-DEBUG'])
     else:
         env.Append(CPPDEFINES=['NDEBUG'])
-        env.Append(CCFLAGS=['-O2', '-EHsc', '-MD'])
+        env.Append(CCFLAGS=['-EHsc', '-MD', '-O2'])
 
 if env['target'] in ('debug', 'd'):
     cpp_library += '.debug'
@@ -93,7 +93,7 @@ cpp_library += '.' + str(bits)
 
 # make sure our binding library is properly includes
 env.Append(CPPPATH=['.', godot_headers_path, cpp_bindings_path + 'include/', cpp_bindings_path + 'include/core/', cpp_bindings_path + 'include/gen/', opus_headers])
-env.Append(LIBPATH=[cpp_bindings_path + 'bin/', 'libs/'])
+env.Append(LIBPATH=[cpp_bindings_path + 'bin/', 'libs/', 'libs/win_x64/'])
 env.Append(LIBS=[cpp_library, 'opus.lib'])
 
 # tweak this if you want to use different folders, or more folders, to store your source code in.
