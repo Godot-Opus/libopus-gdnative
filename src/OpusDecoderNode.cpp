@@ -27,6 +27,9 @@ void OpusDecoderNode::_ready()
 	frame_size = sample_rate / 50; // We want a 20ms window
 	max_frame_size = frame_size * 6;
 
+	outBuffSize = max_frame_size * channels;
+	outBuff = new opus_int16[outBuffSize];
+
 	int err;
 	decoder = opus_decoder_create(sample_rate, channels, &err);
 	if(err < 0)
@@ -42,6 +45,8 @@ void OpusDecoderNode::_exit_tree()
 		opus_decoder_destroy(decoder);
 		decoder = nullptr;
 	}
+
+	delete [] outBuff;
 }
 
 PoolByteArray OpusDecoderNode::decode(const PoolByteArray &opusEncoded)
@@ -51,15 +56,13 @@ PoolByteArray OpusDecoderNode::decode(const PoolByteArray &opusEncoded)
 	const int numInputBytes = opusEncoded.size();
 	const unsigned char *compressedBytes = opusEncoded.read().ptr();
 
-	opus_int16 *out = new opus_int16[max_frame_size];
-
 	int byteMark = 0;
 
 	bool done = false;
 	while(!done)
 	{
 		// Clear the buffers
-		memset(out, 0, sizeof(opus_int16)*max_frame_size);
+		memset(outBuff, 0, outBuffSize);
 
 		// Parse out packet size
 		Bytes4 b{0};
@@ -68,10 +71,10 @@ PoolByteArray OpusDecoderNode::decode(const PoolByteArray &opusEncoded)
 
 		byteMark += 4; // Move past the packet size
 
-		// Very unintelegent sanity check to make sure our packet size header wasn't corrupt
+		// Very unintelligent sanity check to make sure our packet size header wasn't corrupt
 		if(packetSize <= 0 || packetSize > 2048)
 		{
-			Godot::print("Bad packet size, exiting.");
+			WARN_PRINT("Bad packet size, exiting.");
 			break;
 		}
 
@@ -87,15 +90,15 @@ PoolByteArray OpusDecoderNode::decode(const PoolByteArray &opusEncoded)
 		}
 
 		// Decode the current opus packet
-		int out_frame_size = opus_decode(decoder, inData, packetSize, out, max_frame_size, 0);
+		int out_frame_size = opus_decode(decoder, inData, packetSize, outBuff, max_frame_size, 0);
 		if(out_frame_size < 0)
 		{
-			Godot::print("decoder failed: {0}", opus_strerror(out_frame_size));
+			WARN_PRINT(String().format("decoder failed: {0}", opus_strerror(out_frame_size)));
 			break;
 		}
 
 		// Prep output for copy
-		const unsigned char *outBytes = reinterpret_cast<unsigned char*>(out);
+		const unsigned char *outBytes = reinterpret_cast<unsigned char*>(outBuff);
 		const int outBytesSize = out_frame_size * channels * pcm_channel_size;
 
 		// Resize to fit the new frame
@@ -107,8 +110,6 @@ PoolByteArray OpusDecoderNode::decode(const PoolByteArray &opusEncoded)
 		uint8_t *targetArea = &(decodedBytes[initialSize]);
 		memcpy(targetArea, outBytes, outBytesSize);
 	}
-
-	delete [] out;
 
 	return decodedPcm;
 }
