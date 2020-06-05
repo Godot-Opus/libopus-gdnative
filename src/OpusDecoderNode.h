@@ -5,6 +5,7 @@
 #ifndef OPUS_GDNATIVE_OPUSDECODERNODE_H
 #define OPUS_GDNATIVE_OPUSDECODERNODE_H
 
+#include <mutex>
 #include <Godot.hpp>
 #include <Node.hpp>
 #include <opus.h>
@@ -21,6 +22,8 @@ namespace opus
 		OpusDecoder *decoder = nullptr;
 		int outBuffSize;
 		opus_int16 *outBuff = nullptr;
+
+		std::mutex decoder_mutex;
 	public:
 		int sample_rate;
 		int pcm_channel_size;
@@ -33,7 +36,7 @@ namespace opus
 		void _ready();
 		void _exit_tree();
 
-		godot::PoolByteArray decode(const godot::PoolByteArray& opusEncoded);
+		godot::PoolByteArray decode(const godot::PoolByteArray opusEncoded);
 
 		static void _register_methods();
 	};

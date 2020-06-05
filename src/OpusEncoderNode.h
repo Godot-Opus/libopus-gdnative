@@ -5,6 +5,7 @@
 #ifndef OPUS_GDNATIVE_OPUS_H
 #define OPUS_GDNATIVE_OPUS_H
 
+#include <mutex>
 #include <Godot.hpp>
 #include <Node.hpp>
 #include <opus.h>
@@ -21,6 +22,8 @@ namespace opus
 		int inputSamplesSize;
 		opus_int16 *inputSamples = nullptr;
 		unsigned char outBuff[sizeof(opus_int16) * MAX_PACKET_SIZE];
+
+		std::mutex encoder_mutex;
 
 		/**
 		 * Size of each PCM frame in number of samples
@@ -42,7 +45,7 @@ namespace opus
 		void _exit_tree();
 
 		//godot::PoolByteArray resample_441kh_48kh(const godot::PoolByteArray &rawPcm);
-		godot::PoolByteArray encode(const godot::PoolByteArray& rawPcm);
+		godot::PoolByteArray encode(const godot::PoolByteArray rawPcm);
 
 		static void _register_methods();
 	};

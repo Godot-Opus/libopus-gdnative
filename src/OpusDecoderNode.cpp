@@ -24,6 +24,8 @@ void OpusDecoderNode::_init()
 
 void OpusDecoderNode::_ready()
 {
+	lock_guard<mutex> guard(decoder_mutex);
+
 	frame_size = sample_rate / 50; // We want a 20ms window
 	max_frame_size = frame_size * 6;
 
@@ -40,6 +42,8 @@ void OpusDecoderNode::_ready()
 
 void OpusDecoderNode::_exit_tree()
 {
+	lock_guard<mutex> guard(decoder_mutex);
+
 	if(decoder != nullptr)
 	{
 		opus_decoder_destroy(decoder);
@@ -50,12 +54,22 @@ void OpusDecoderNode::_exit_tree()
 	outBuff = nullptr;
 }
 
-PoolByteArray OpusDecoderNode::decode(const PoolByteArray &opusEncoded)
+PoolByteArray OpusDecoderNode::decode(const PoolByteArray opusEncoded)
 {
+	lock_guard<mutex> guard(decoder_mutex);
+
 	PoolByteArray decodedPcm;
 
 	const int numInputBytes = opusEncoded.size();
-	const unsigned char *compressedBytes = opusEncoded.read().ptr();
+
+	if(numInputBytes <= 0)
+	{
+		WARN_PRINT("Opus Decoder: encoded input was empty");
+		return decodedPcm;
+	}
+
+	PoolByteArray::Read read = opusEncoded.read();
+	const unsigned char *compressedBytes = read.ptr();
 
 	int byteMark = 0;
 
@@ -94,7 +108,7 @@ PoolByteArray OpusDecoderNode::decode(const PoolByteArray &opusEncoded)
 		int out_frame_size = opus_decode(decoder, inData, packetSize, outBuff, max_frame_size, 0);
 		if(out_frame_size < 0)
 		{
-			WARN_PRINT(String().format("decoder failed: {0}", opus_strerror(out_frame_size)));
+			WARN_PRINT(String("decoder failed: {0}").format(Array::make(opus_strerror(out_frame_size))));
 			break;
 		}
 

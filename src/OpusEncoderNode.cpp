@@ -32,6 +32,8 @@ void OpusEncoderNode::_init()
 
 void OpusEncoderNode::_ready()
 {
+	lock_guard<mutex> guard(encoder_mutex);
+
 	int err;
 
 	frame_size = sample_rate / 50;
@@ -56,6 +58,8 @@ void OpusEncoderNode::_ready()
 
 void OpusEncoderNode::_exit_tree()
 {
+	lock_guard<mutex> guard(encoder_mutex);
+
 	if(encoder != nullptr)
 	{
 		opus_encoder_destroy(encoder);
@@ -66,11 +70,20 @@ void OpusEncoderNode::_exit_tree()
 	inputSamples = nullptr;
 }
 
-PoolByteArray OpusEncoderNode::encode(const PoolByteArray &rawPcm)
+PoolByteArray OpusEncoderNode::encode(const PoolByteArray rawPcm)
 {
+	lock_guard<mutex> guard(encoder_mutex);
+
 	PoolByteArray encodedBytes;
 
 	const int numPcmBytes = rawPcm.size();
+
+	if(numPcmBytes <= 0)
+	{
+		WARN_PRINT(String("Opus Encoder: empty audio buffer, cannot encode nothing!"));
+		return encodedBytes;
+	}
+
 	const unsigned char *pcm_bytes = rawPcm.read().ptr();
 
 	const int bytesPerSample = pcm_channel_size * channels;
@@ -110,7 +123,7 @@ PoolByteArray OpusEncoderNode::encode(const PoolByteArray &rawPcm)
 		int opusPacketSize = opus_encode(encoder, inputSamples, frame_size, outBuff, MAX_PACKET_SIZE);
 		if(opusPacketSize < 0)
 		{
-			Godot::print("encode failed: {0}", opus_strerror(opusPacketSize));
+			WARN_PRINT(String("encode failed: {0}!").format(Array::make(opus_strerror(opusPacketSize))));
 			break;
 		}
 

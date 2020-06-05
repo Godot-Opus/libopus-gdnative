@@ -8,6 +8,7 @@ env = DefaultEnvironment()
 
 # Define our options
 opts.Add(EnumVariable('target', "Compilation target", 'debug', ['d', 'debug', 'r', 'release']))
+opts.Add(EnumVariable('t', "Compilation target", 'debug', ['d', 'debug', 'r', 'release']))
 opts.Add(EnumVariable('platform', "Compilation platform", '', ['', 'windows', 'x11', 'linux', 'osx']))
 opts.Add(EnumVariable('p', "Compilation target, alias for 'platform'", '', ['', 'windows', 'x11', 'linux', 'osx']))
 opts.Add(BoolVariable('use_llvm', "Use the LLVM / Clang compiler", 'no'))
@@ -33,6 +34,9 @@ if env['use_llvm']:
 
 if env['p'] != '':
     env['platform'] = env['p']
+
+if env['t'] != '':
+    env['target'] = env['t']
 
 if env['platform'] == '':
     print("No valid target platform selected.")
