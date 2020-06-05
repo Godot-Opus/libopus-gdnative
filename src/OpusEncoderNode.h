@@ -38,7 +38,7 @@ namespace opus
 		void _ready();
 		void _exit_tree();
 
-		godot::PoolByteArray resample_441kh_48kh(const godot::PoolByteArray &rawPcm);
+		//godot::PoolByteArray resample_441kh_48kh(const godot::PoolByteArray &rawPcm);
 		godot::PoolByteArray encode(const godot::PoolByteArray& rawPcm);
 
 		static void _register_methods();

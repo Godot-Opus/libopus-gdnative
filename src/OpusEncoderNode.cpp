@@ -73,6 +73,7 @@ inline double lerp(double v0, double v1, double t) {
 	return (1.0 - t) * v0 + t * v1;
 }
 
+/*
 PoolByteArray OpusEncoderNode::resample_441kh_48kh(const PoolByteArray &rawPcm)
 {
 	const float ratio = 160.0f/147.0f;
@@ -136,16 +137,16 @@ PoolByteArray OpusEncoderNode::resample_441kh_48kh(const PoolByteArray &rawPcm)
 
 	return upsampled;
 }
+*/
 
 PoolByteArray OpusEncoderNode::encode(const PoolByteArray &rawPcm)
 {
 	PoolByteArray encodedBytes;
 
 	//PoolByteArray upsampled = resample_441kh_48kh(rawPcm);
-	PoolByteArray upsampled = rawPcm;
 
-	const int numPcmBytes = upsampled.size();
-	const unsigned char *pcm_bytes = upsampled.read().ptr();
+	const int numPcmBytes = rawPcm.size();
+	const unsigned char *pcm_bytes = rawPcm.read().ptr();
 
 	const int bytesPerSample = pcm_channel_size * channels;
 
@@ -197,12 +198,14 @@ PoolByteArray OpusEncoderNode::encode(const PoolByteArray &rawPcm)
 		Bytes4 b{opusPacketSize};
 		for(unsigned char byte : b.bytes) encodedBytes.append(byte);
 
-		// $TODO: Need to pre-allocate the extra space in `encodedBytes`
-		// Copy the newly encoded bytes into our output
-		for(int ii = 0; ii < opusPacketSize; ++ii)
-		{
-			encodedBytes.append(outBuff[ii]);
-		}
+		// Resize to fit the new frame
+		int initialSize = encodedBytes.size();
+		encodedBytes.resize(initialSize + opusPacketSize);
+
+		// Copy the new data into the output array
+		uint8_t *pbaData = encodedBytes.write().ptr();
+		uint8_t *targetArea = &(pbaData[initialSize]);
+		memcpy(targetArea, outBuff, opusPacketSize);
 
 		// Record that we've processed how ever many frames we processed
 		remainingSamples -= curFrameSize;

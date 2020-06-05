@@ -63,9 +63,11 @@ elif env['platform'] in ('x11', 'linux'):
     if env['target'] in ('debug', 'd'):
         env.Append(CCFLAGS=['-fPIC', '-g3', '-Og'])
         env.Append(CXXFLAGS=['-std=c++17'])
+        env.Append(LINKFLAGS=['libopus.a'])
     else:
         env.Append(CCFLAGS=['-fPIC', '-g', '-O3'])
         env.Append(CXXFLAGS=['-std=c++17'])
+        env.Append(LINKFLAGS=['libopus.a'])
 
 elif env['platform'] == "windows":
     env['target_path'] += 'win64/'
@@ -83,7 +85,7 @@ elif env['platform'] == "windows":
     else:
         env.Append(CPPDEFINES=['NDEBUG'])
         env.Append(CCFLAGS=['-EHsc', '-MD', '-O2'])
-        env.Append(LINKFLAGS=['-NDEBUG','opus.lib'])
+        env.Append(LINKFLAGS=['opus.lib'])
 
 if env['target'] in ('debug', 'd'):
     cpp_library += '.debug'
@@ -94,8 +96,9 @@ cpp_library += '.' + str(bits)
 
 # make sure our binding library is properly includes
 env.Append(CPPPATH=['.', godot_headers_path, cpp_bindings_path + 'include/', cpp_bindings_path + 'include/core/', cpp_bindings_path + 'include/gen/', opus_headers])
-env.Append(LIBPATH=[cpp_bindings_path + 'bin/', 'libs/', 'libs/win_x64/'])
-env.Append(LIBS=[cpp_library, 'opus.lib'])
+env.Append(LIBPATH=[cpp_bindings_path + 'bin/', 'libs/', 'libs/win_x64/', 'libs/linux/'])
+env.Append(LIBS=[cpp_library])
+
 
 # tweak this if you want to use different folders, or more folders, to store your source code in.
 env.Append(CPPPATH=['src/'])

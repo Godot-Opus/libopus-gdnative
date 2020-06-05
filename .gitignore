@@ -5,3 +5,4 @@ cmake-build-debug
 bin
 .idea
 *.o
+*.os

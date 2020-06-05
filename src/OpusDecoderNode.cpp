@@ -48,7 +48,7 @@ PoolByteArray OpusDecoderNode::decode(const PoolByteArray &opusEncoded)
 {
 	PoolByteArray decodedPcm;
 
-	int numInputBytes = opusEncoded.size();
+	const int numInputBytes = opusEncoded.size();
 	const unsigned char *compressedBytes = opusEncoded.read().ptr();
 
 	opus_int16 *out = new opus_int16[max_frame_size];
@@ -64,10 +64,11 @@ PoolByteArray OpusDecoderNode::decode(const PoolByteArray &opusEncoded)
 		// Parse out packet size
 		Bytes4 b{0};
 		for(int ii=0; ii<4; ++ii) b.bytes[ii] = compressedBytes[byteMark+ii];
-		int packetSize = b.integer;
+		const int packetSize = b.integer;
 
 		byteMark += 4; // Move past the packet size
 
+		// Very unintelegent sanity check to make sure our packet size header wasn't corrupt
 		if(packetSize <= 0 || packetSize > 2048)
 		{
 			Godot::print("Bad packet size, exiting.");
@@ -93,11 +94,18 @@ PoolByteArray OpusDecoderNode::decode(const PoolByteArray &opusEncoded)
 			break;
 		}
 
-		unsigned char *bytes = reinterpret_cast<unsigned char*>(out);
-		for(int ii=0; ii<out_frame_size*channels*pcm_channel_size; ++ii)
-		{
-			decodedPcm.append(bytes[ii]);
-		}
+		// Prep output for copy
+		const unsigned char *outBytes = reinterpret_cast<unsigned char*>(out);
+		const int outBytesSize = out_frame_size * channels * pcm_channel_size;
+
+		// Resize to fit the new frame
+		const int initialSize = decodedPcm.size();
+		decodedPcm.resize(initialSize + outBytesSize);
+
+		// Copy the new data into the output buffer
+		uint8_t *decodedBytes = decodedPcm.write().ptr();
+		uint8_t *targetArea = &(decodedBytes[initialSize]);
+		memcpy(targetArea, outBytes, outBytesSize);
 	}
 
 	delete [] out;
