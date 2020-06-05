@@ -2,7 +2,6 @@ bu
 cmake-build-debug
 *.dblite
 *.idb
-bin
+./bin/*
 .idea
 *.o
-*.os
