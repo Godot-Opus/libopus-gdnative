@@ -47,6 +47,7 @@ void OpusDecoderNode::_exit_tree()
 	}
 
 	delete [] outBuff;
+	outBuff = nullptr;
 }
 
 PoolByteArray OpusDecoderNode::decode(const PoolByteArray &opusEncoded)

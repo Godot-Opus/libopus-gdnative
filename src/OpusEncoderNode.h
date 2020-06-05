@@ -8,6 +8,7 @@
 #include <Godot.hpp>
 #include <Node.hpp>
 #include <opus.h>
+#include "Values.h"
 
 namespace opus
 {
@@ -17,6 +18,9 @@ namespace opus
 		GODOT_CLASS(OpusEncoderNode, godot::Node)
 
 		OpusEncoder *encoder = nullptr;
+		int inputSamplesSize;
+		opus_int16 *inputSamples = nullptr;
+		unsigned char outBuff[sizeof(opus_int16) * MAX_PACKET_SIZE];
 
 		/**
 		 * Size of each PCM frame in number of samples
@@ -27,7 +31,6 @@ namespace opus
 		int pcm_channel_size;
 		int channels;
 		int max_frame_size;
-
 	public:
 		int bit_rate;
 
