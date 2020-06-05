@@ -60,14 +60,13 @@ if env['platform'] == "osx":
 elif env['platform'] in ('x11', 'linux'):
     env['target_path'] += 'x11/'
     cpp_library += '.linux'
+    env.Append(LIBS=['libopus.so'])
     if env['target'] in ('debug', 'd'):
         env.Append(CCFLAGS=['-fPIC', '-g3', '-Og'])
         env.Append(CXXFLAGS=['-std=c++17'])
-        env.Append(LINKFLAGS=['libopus.a'])
     else:
         env.Append(CCFLAGS=['-fPIC', '-g', '-O3'])
         env.Append(CXXFLAGS=['-std=c++17'])
-        env.Append(LINKFLAGS=['libopus.a'])
 
 elif env['platform'] == "windows":
     env['target_path'] += 'win64/'
@@ -96,7 +95,7 @@ cpp_library += '.' + str(bits)
 
 # make sure our binding library is properly includes
 env.Append(CPPPATH=['.', godot_headers_path, cpp_bindings_path + 'include/', cpp_bindings_path + 'include/core/', cpp_bindings_path + 'include/gen/', opus_headers])
-env.Append(LIBPATH=[cpp_bindings_path + 'bin/', 'libs/', 'libs/win_x64/', 'libs/linux/'])
+env.Append(LIBPATH=[cpp_bindings_path + 'bin/', 'libs/', 'libs/win_x64/', './libs/linux/'])
 env.Append(LIBS=[cpp_library])
 
 
