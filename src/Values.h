@@ -5,6 +5,8 @@
 #ifndef OPUS_GDNATIVE_VALUES_H
 #define OPUS_GDNATIVE_VALUES_H
 
+#include <opus.h>
+
 // 1276 is the recomended value from Opus
 constexpr int MAX_PACKET_SIZE = (3 * 1276);
 constexpr int DEFAULT_SAMPLE_RATE = 48000;
