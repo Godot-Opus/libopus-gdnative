@@ -110,12 +110,10 @@ PoolByteArray OpusEncoderNode::encode(const PoolByteArray rawPcm)
 			done = true;
 		}
 
-		// Remember: input_bytes elements are 2 bytes wide, pcm_bytes are 1 byte wide.
-		const opus_int16 *pcmSamples = reinterpret_cast<const opus_int16 *>(&pcm_bytes[markPos]);
 		// Copy the input samples into our buffer. This is important because opus_encode() wants
 		// to read a full frame_size worth of data. If we have less than a full frame at the end, it would
 		// read off the end of pcmSamples. Thus we need a zeroed out buffer so it reads into empty data.
-		memcpy(inputSamples, pcmSamples, (curFrameSize * channels));
+		memcpy(inputSamples, &pcm_bytes[markPos], (curFrameSize * channels * pcm_channel_size));
 
 		markPos += (curFrameSize * channels * pcm_channel_size);
 
