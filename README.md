@@ -1,7 +1,7 @@
 # libOpus-gdnative
 GDnative integration of libOpus for Godot
 
-## So far this is only proof of concept quality, and is in no way ready to be used in production.
+## So far this is in a very early state. There is still opitimization work to be done, and most of the advanced features of libOpus are not yet exposed.
 
 One key component Godot is missing for enabling VOIP features, is an audio code that can be used at run-time to compress and decompress audio for transmission.
 
