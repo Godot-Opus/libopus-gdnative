@@ -8,14 +8,14 @@ include $(PREBUILT_STATIC_LIBRARY)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := opus
-LOCAL_SRC_FILES := ../libs/android/arm64-v8a/bin/libopus.a
-include $(PREBUILT_STATIC_LIBRARY)
+LOCAL_SRC_FILES := ../libs/android/arm64-v8a/bin/libopus.so
+include $(PREBUILT_SHARED_LIBRARY)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := godot-opus
 LOCAL_CPPFLAGS := -std=c++17
 LOCAL_CPP_FEATURES := rtti exceptions
-LOCAL_CFLAGS := -w
+LOCAL_CFLAGS := -Wno-error
 LOCAL_LDLIBS := -llog
 
 LOCAL_SRC_FILES := \
