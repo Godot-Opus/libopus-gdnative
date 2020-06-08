@@ -22,6 +22,7 @@ LOCAL_SRC_FILES := \
 ../src/init.cpp \
 ../src/OpusDecoderNode.cpp \
 ../src/OpusEncoderNode.cpp \
+../src/Utils.cpp
 
 #LOCAL_SHARED_LIBRARIES := 
 
