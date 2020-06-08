@@ -19,5 +19,5 @@ include_directories(godot-cpp/include/core)
 include_directories(godot-cpp/include/gen)
 include_directories(src)
 
-add_library(opus_gdnative src/OpusEncoderNode.cpp src/OpusEncoderNode.h src/init.cpp src/OpusDecoderNode.cpp src/OpusDecoderNode.h src/Values.h)
+add_library(opus_gdnative src/OpusEncoderNode.cpp src/OpusEncoderNode.h src/init.cpp src/OpusDecoderNode.cpp src/OpusDecoderNode.h src/Values.h src/Utils.h src/Utils.cpp)
 target_link_libraries(opus_gdnative ${CONAN_LIBS})

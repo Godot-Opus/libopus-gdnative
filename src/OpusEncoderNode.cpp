@@ -4,6 +4,7 @@
 
 #include "OpusEncoderNode.h"
 #include "Values.h"
+#include "Utils.h"
 
 using namespace std;
 using namespace opus;
@@ -84,13 +85,22 @@ PoolByteArray OpusEncoderNode::encode(const PoolByteArray rawPcm)
 		return encodedBytes;
 	}
 
+	// Set an initial size for the output buffer
+	// Ideally this will not need to be resized during most encodings
+	// Then at the end we'll resize down to the size needed. Just 2 resizes
+	const int defaultAudioLengthGuessSeconds = 5;
+	const int packetsPerSecond = 50;
+	const int initialOutputSize = (MAX_PACKET_SIZE * packetsPerSecond * defaultAudioLengthGuessSeconds);
+	encodedBytes.resize(initialOutputSize);
+
 	const unsigned char *pcm_bytes = rawPcm.read().ptr();
 
 	const int bytesPerSample = pcm_channel_size * channels;
 	const int availableSamples = numPcmBytes / bytesPerSample;
 	int remainingSamples = availableSamples;
 
-	int markPos = 0;
+	int inMarkPos = 0;
+	int outPos = 0;
 	bool done = false;
 	while(!done)
 	{
@@ -113,9 +123,9 @@ PoolByteArray OpusEncoderNode::encode(const PoolByteArray rawPcm)
 		// Copy the input samples into our buffer. This is important because opus_encode() wants
 		// to read a full frame_size worth of data. If we have less than a full frame at the end, it would
 		// read off the end of pcmSamples. Thus we need a zeroed out buffer so it reads into empty data.
-		memcpy(inputSamples, &pcm_bytes[markPos], (curFrameSize * channels * pcm_channel_size));
+		memcpy(inputSamples, &pcm_bytes[inMarkPos], (curFrameSize * channels * pcm_channel_size));
 
-		markPos += (curFrameSize * channels * pcm_channel_size);
+		inMarkPos += (curFrameSize * channels * pcm_channel_size);
 
 		// Encode the frame.
 		int opusPacketSize = opus_encode(encoder, inputSamples, frame_size, outBuff, MAX_PACKET_SIZE);
@@ -126,24 +136,33 @@ PoolByteArray OpusEncoderNode::encode(const PoolByteArray rawPcm)
 		}
 
 		// Prepend the frame size
+		ensure_buffer_size(encodedBytes, outPos, 4);
+		uint8_t *pbaData = encodedBytes.write().ptr();
 		Bytes4 b{opusPacketSize};
-		for(unsigned char byte : b.bytes) encodedBytes.append(byte);
-
-		// Resize to fit the new frame
-		int initialSize = encodedBytes.size();
-		encodedBytes.resize(initialSize + opusPacketSize);
+		for(int ii=0; ii<4; ++ii) pbaData[outPos+ii] = b.bytes[ii];
+		outPos += 4;
 
 		// Copy the new data into the output array
-		uint8_t *pbaData = encodedBytes.write().ptr();
-		uint8_t *targetArea = &(pbaData[initialSize]);
+		ensure_buffer_size(encodedBytes, outPos, opusPacketSize);
+		pbaData = encodedBytes.write().ptr(); // We have to get this again incase ensure_buffer_size() resized the buffer
+		uint8_t *targetArea = &(pbaData[outPos]);
 		memcpy(targetArea, outBuff, opusPacketSize);
+		outPos += opusPacketSize;
 
 		// Record that we've processed how ever many frames we processed
 		remainingSamples -= curFrameSize;
 	}
 
+	// Down size our buffer to the required size
+	if(encodedBytes.size() > outPos+1)
+	{
+		encodedBytes.resize(outPos+1);
+	}
+
 	return encodedBytes;
 }
+
+
 
 void OpusEncoderNode::_register_methods()
 {
