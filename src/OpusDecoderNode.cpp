@@ -4,12 +4,14 @@
 
 #include "OpusDecoderNode.h"
 #include "Values.h"
+#include "Utils.h"
 
 using namespace std;
 using namespace opus;
 using namespace godot;
 
 OpusDecoderNode::OpusDecoderNode() = default;
+
 OpusDecoderNode::~OpusDecoderNode() = default;
 
 void OpusDecoderNode::_init()
@@ -24,7 +26,7 @@ void OpusDecoderNode::_init()
 
 void OpusDecoderNode::_ready()
 {
-	lock_guard<mutex> guard(decoder_mutex);
+	lock_guard <mutex> guard(decoder_mutex);
 
 	frame_size = sample_rate / 50; // We want a 20ms window
 	max_frame_size = frame_size * 6;
@@ -42,7 +44,7 @@ void OpusDecoderNode::_ready()
 
 void OpusDecoderNode::_exit_tree()
 {
-	lock_guard<mutex> guard(decoder_mutex);
+	lock_guard <mutex> guard(decoder_mutex);
 
 	if(decoder != nullptr)
 	{
@@ -50,7 +52,7 @@ void OpusDecoderNode::_exit_tree()
 		decoder = nullptr;
 	}
 
-	delete [] outBuff;
+	delete[] outBuff;
 	outBuff = nullptr;
 }
 
@@ -68,10 +70,19 @@ PoolByteArray OpusDecoderNode::decode(const PoolByteArray opusEncoded)
 		return decodedPcm;
 	}
 
-	PoolByteArray::Read read = opusEncoded.read();
+	// Initial output buffer size for 5 seconds of audio
+	const int max_frame_size_bytes = max_frame_size * channels * pcm_channel_size;
+	const int framesPerSecond = 50;
+	const int initialOutputSize = max_frame_size_bytes * framesPerSecond;
+	decodedPcm.resize(initialOutputSize);
+
+	const PoolByteArray::Read read = opusEncoded.read();
 	const unsigned char *compressedBytes = read.ptr();
 
+	// How far into the inptu buffer we are
 	int byteMark = 0;
+	// Keep track of how far into the output buffer we are
+	int outByteMark = 0;
 
 	bool done = false;
 	while(!done)
@@ -81,7 +92,7 @@ PoolByteArray OpusDecoderNode::decode(const PoolByteArray opusEncoded)
 
 		// Parse out packet size
 		Bytes4 b{0};
-		for(int ii=0; ii<4; ++ii) b.bytes[ii] = compressedBytes[byteMark+ii];
+		for(int ii = 0; ii < 4; ++ii) b.bytes[ii] = compressedBytes[byteMark + ii];
 		const int packetSize = b.integer;
 
 		byteMark += 4; // Move past the packet size
@@ -99,7 +110,7 @@ PoolByteArray OpusDecoderNode::decode(const PoolByteArray opusEncoded)
 		byteMark += packetSize; // move past the packet
 
 		// If this is the last packet, we will exit when we finish this pass
-		if(byteMark >= numInputBytes-5)
+		if(byteMark >= numInputBytes - 5)
 		{
 			done = true;
 		}
@@ -113,17 +124,23 @@ PoolByteArray OpusDecoderNode::decode(const PoolByteArray opusEncoded)
 		}
 
 		// Prep output for copy
-		const unsigned char *outBytes = reinterpret_cast<unsigned char*>(outBuff);
+		const unsigned char *outBytes = reinterpret_cast<unsigned char *>(outBuff);
 		const int outBytesSize = out_frame_size * channels * pcm_channel_size;
 
-		// Resize to fit the new frame
-		const int initialSize = decodedPcm.size();
-		decodedPcm.resize(initialSize + outBytesSize);
-
 		// Copy the new data into the output buffer
+		ensure_buffer_size(decodedPcm, outByteMark, outBytesSize);
 		uint8_t *decodedBytes = decodedPcm.write().ptr();
-		uint8_t *targetArea = &(decodedBytes[initialSize]);
+		uint8_t *targetArea = &(decodedBytes[outByteMark]);
 		memcpy(targetArea, outBytes, outBytesSize);
+
+		// Move the mark past the bytes we just wrote
+		outByteMark += outBytesSize;
+	}
+
+	// Down size our buffer to the required size
+	if(decodedPcm.size() > outByteMark+1)
+	{
+		decodedPcm.resize(outByteMark+1);
 	}
 
 	return decodedPcm;
