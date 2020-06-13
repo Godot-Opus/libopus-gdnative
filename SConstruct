@@ -54,6 +54,7 @@ if env['platform'] == '':
 if env['platform'] == "osx":
     env['target_path'] += 'osx/'
     cpp_library += '.osx'
+    env.Append(LIBS=['libopus.dylib'])
     if env['target'] in ('debug', 'd'):
         env.Append(CCFLAGS=['-g', '-O2', '-arch', 'x86_64'])
         env.Append(LINKFLAGS=['-arch', 'x86_64'])
@@ -100,7 +101,7 @@ cpp_library += '.' + str(bits)
 
 # make sure our binding library is properly includes
 env.Append(CPPPATH=['.', godot_headers_path, cpp_bindings_path + 'include/', cpp_bindings_path + 'include/core/', cpp_bindings_path + 'include/gen/', opus_headers])
-env.Append(LIBPATH=[cpp_bindings_path + 'bin/', 'libs/', 'libs/win_x64/', './libs/linux/'])
+env.Append(LIBPATH=[cpp_bindings_path + 'bin/', 'libs/', 'libs/win_x64/', './libs/linux/', './libs/osx/'])
 env.Append(LIBS=[cpp_library])
 
 
