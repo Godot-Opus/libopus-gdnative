@@ -54,16 +54,21 @@ if env['platform'] == '':
 if env['platform'] == "osx":
     env['target_path'] += 'osx/'
     cpp_library += '.osx'
+    env.Append(LIBPATH=['./libs/osx/'])
+    env.Append(LIBS=['libopus.dylib'])
     if env['target'] in ('debug', 'd'):
         env.Append(CCFLAGS=['-g', '-O2', '-arch', 'x86_64'])
+        env.Append(CXXFLAGS=['-std=c++17'])
         env.Append(LINKFLAGS=['-arch', 'x86_64'])
     else:
         env.Append(CCFLAGS=['-g', '-O3', '-arch', 'x86_64'])
+        env.Append(CXXFLAGS=['-std=c++17'])
         env.Append(LINKFLAGS=['-arch', 'x86_64'])
 
 elif env['platform'] in ('x11', 'linux'):
     env['target_path'] += 'x11/'
     cpp_library += '.linux'
+    env.Append(LIBPATH=['./libs/linux/'])
     env.Append(LIBS=['libopus.so'])
     if env['target'] in ('debug', 'd'):
         env.Append(CCFLAGS=['-fPIC', '-g3', '-Og'])
@@ -79,17 +84,18 @@ elif env['platform'] == "windows":
     # This makes sure to keep the session environment variables on windows,
     # that way you can run scons in a vs 2017 prompt and it will find all the required tools
     env.Append(ENV=os.environ)
-
+    env.Append(LIBPATH=[cpp_bindings_path + 'bin/', 'libs/', 'libs/win_x64/', './libs/linux/', './libs/osx/'])
     env.Append(CPPDEFINES=['WIN32', '_WIN32', '_WINDOWS', '_CRT_SECURE_NO_WARNINGS', 'OPUS_BUILD', 'DLL_EXPORT'])
     env.Append(CCFLAGS=['-W3', '-GR', '/std:c++17'])
+    env.Append(LIBPATH=['libs/win_x64/'])
+    env.Append(LIBS=['opus.lib'])
     if env['target'] in ('debug', 'd'):
         env.Append(CPPDEFINES=['_DEBUG'])
         env.Append(CCFLAGS=['-EHsc', '-MDd', '-ZI'])
-        env.Append(LINKFLAGS=['-DEBUG', 'opus.lib'])
+        env.Append(LINKFLAGS=['-DEBUG'])
     else:
         env.Append(CPPDEFINES=['NDEBUG'])
         env.Append(CCFLAGS=['-EHsc', '-MD', '-O2'])
-        env.Append(LINKFLAGS=['opus.lib'])
 
 if env['target'] in ('debug', 'd'):
     cpp_library += '.debug'
@@ -100,7 +106,7 @@ cpp_library += '.' + str(bits)
 
 # make sure our binding library is properly includes
 env.Append(CPPPATH=['.', godot_headers_path, cpp_bindings_path + 'include/', cpp_bindings_path + 'include/core/', cpp_bindings_path + 'include/gen/', opus_headers])
-env.Append(LIBPATH=[cpp_bindings_path + 'bin/', 'libs/', 'libs/win_x64/', './libs/linux/'])
+env.Append(LIBPATH=[cpp_bindings_path + 'bin/'])
 env.Append(LIBS=[cpp_library])
 
 
