@@ -8,8 +8,8 @@ include $(PREBUILT_STATIC_LIBRARY)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := opus
-LOCAL_SRC_FILES := ../libs/android/arm64-v8a/libopus.so
-include $(PREBUILT_SHARED_LIBRARY)
+LOCAL_SRC_FILES := ../libs/android/arm64-v8a/libopus.a
+include $(PREBUILT_STATIC_LIBRARY)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := godot-opus
