@@ -55,7 +55,7 @@ if env['platform'] == "osx":
     env['target_path'] += 'osx/'
     cpp_library += '.osx'
     env.Append(LIBPATH=['./libs/osx/'])
-    env.Append(LIBS=['libopus.dylib'])
+    env.Append(LIBS=['opus'])
     if env['target'] in ('debug', 'd'):
         env.Append(CCFLAGS=['-g', '-O2', '-arch', 'x86_64'])
         env.Append(CXXFLAGS=['-std=c++17'])
