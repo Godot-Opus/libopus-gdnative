@@ -2,6 +2,10 @@ bu
 cmake-build-debug
 *.dblite
 *.idb
-./bin/*
+bin/*
 .idea
 *.o
+CMakeFiles/
+CMakeCache.txt
+Logs/
+Src/*.os
