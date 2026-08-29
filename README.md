@@ -11,8 +11,14 @@ This extension adds 2 nodes to Godot:
 - OpusEncoderNode
   - `encode(raw_pcm)` : Accepts a `PackedByteArray` of 48kHz 16bit PCM Stereo audio samples. Returns a `PackedByteArray` of Opus data Packets interleaved with header data describing their individual lengths. (*This is a bit custom, and not the real™ way to pack these Opus data packets. But it is the simplest.*)
   - `bit_rate` : Property controlling the encoder bitrate, default 15000.
+  - `sample_rate` : 8000, 12000, 16000, 24000 or 48000 Hz (default 48000).
+  - `channels` : 1 or 2 (default 2).
+  - `application` : Opus application constant, `OPUS_APPLICATION_VOIP` (2048, default), `OPUS_APPLICATION_AUDIO` (2049) or `OPUS_APPLICATION_RESTRICTED_LOWDELAY` (2051).
 - OpusDecoderNode
   - `decode(opus_encoded)` : Accepts a `PackedByteArray` of Opus data Packets packed in our custom interleaved format. Returns raw 16bit stereo PCM data at 48kHz.
+  - `sample_rate` / `channels` : Same as the encoder; both sides must agree.
+
+Changing `sample_rate`, `channels` or `application` recreates the codec state, so set them before use (or between talk bursts). With `channels = 1` the streaming API downmixes the stereo capture frames on encode and duplicates the mono signal into both channels on decode. The nodes do not need to be inside the scene tree; state is created lazily on first use.
 
 `encode`/`decode` are the whole-clip path: encode a complete, continuous sample of audio, then decode it back in one call.
 

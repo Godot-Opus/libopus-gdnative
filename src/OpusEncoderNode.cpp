@@ -28,7 +28,8 @@ OpusEncoderNode::OpusEncoderNode() : Node()
 
 OpusEncoderNode::~OpusEncoderNode()
 {
-
+	lock_guard<mutex> guard(encoder_mutex);
+	_free_state();
 }
 
 void OpusEncoderNode::_ready()
@@ -48,13 +49,16 @@ void OpusEncoderNode::_init_state()
 	max_frame_size = frame_size * 6;
 
 	inputSamplesSize = frame_size * channels;
+	delete [] inputSamples;
 	inputSamples = new opus_int16[inputSamplesSize];
 
 	// Create a new encoder state
 	encoder = opus_encoder_create(sample_rate, channels, application, &err);
-	if(err < 0)
+	if(err < 0 || encoder == nullptr)
 	{
 		WARN_PRINT(vformat("failed to create an encoder: %s", opus_strerror(err)));
+		encoder = nullptr;
+		return;
 	}
 
 	err = opus_encoder_ctl(encoder, OPUS_SET_BITRATE(bit_rate));
@@ -64,10 +68,9 @@ void OpusEncoderNode::_init_state()
 	}
 }
 
-void OpusEncoderNode::_exit_tree()
+// Must be called with encoder_mutex held
+void OpusEncoderNode::_free_state()
 {
-	lock_guard<mutex> guard(encoder_mutex);
-
 	if(encoder != nullptr)
 	{
 		opus_encoder_destroy(encoder);
@@ -76,6 +79,14 @@ void OpusEncoderNode::_exit_tree()
 
 	delete [] inputSamples;
 	inputSamples = nullptr;
+
+	streamBuffer.clear();
+}
+
+void OpusEncoderNode::_exit_tree()
+{
+	lock_guard<mutex> guard(encoder_mutex);
+	_free_state();
 }
 
 void OpusEncoderNode::set_bit_rate(int p_bit_rate)
@@ -99,11 +110,84 @@ int OpusEncoderNode::get_bit_rate() const
 	return bit_rate;
 }
 
-PackedByteArray OpusEncoderNode::encode(const PackedByteArray &rawPcm)
+void OpusEncoderNode::set_sample_rate(int p_sample_rate)
 {
 	lock_guard<mutex> guard(encoder_mutex);
 
+	if(p_sample_rate != 8000 && p_sample_rate != 12000 && p_sample_rate != 16000
+		&& p_sample_rate != 24000 && p_sample_rate != 48000)
+	{
+		WARN_PRINT("Opus supports sample rates of 8000, 12000, 16000, 24000 or 48000 Hz");
+		return;
+	}
+
+	if(p_sample_rate == sample_rate) return;
+
+	sample_rate = p_sample_rate;
+	// State is recreated with the new configuration on the next call
+	_free_state();
+}
+
+int OpusEncoderNode::get_sample_rate() const
+{
+	return sample_rate;
+}
+
+void OpusEncoderNode::set_channels(int p_channels)
+{
+	lock_guard<mutex> guard(encoder_mutex);
+
+	if(p_channels != 1 && p_channels != 2)
+	{
+		WARN_PRINT("Opus supports 1 or 2 channels");
+		return;
+	}
+
+	if(p_channels == channels) return;
+
+	channels = p_channels;
+	_free_state();
+}
+
+int OpusEncoderNode::get_channels() const
+{
+	return channels;
+}
+
+void OpusEncoderNode::set_application(int p_application)
+{
+	lock_guard<mutex> guard(encoder_mutex);
+
+	if(p_application != OPUS_APPLICATION_VOIP && p_application != OPUS_APPLICATION_AUDIO
+		&& p_application != OPUS_APPLICATION_RESTRICTED_LOWDELAY)
+	{
+		WARN_PRINT("application must be OPUS_APPLICATION_VOIP (2048), OPUS_APPLICATION_AUDIO (2049) or OPUS_APPLICATION_RESTRICTED_LOWDELAY (2051)");
+		return;
+	}
+
+	if(p_application == application) return;
+
+	application = p_application;
+	_free_state();
+}
+
+int OpusEncoderNode::get_application() const
+{
+	return application;
+}
+
+PackedByteArray OpusEncoderNode::encode(const PackedByteArray &rawPcm)
+{
+	lock_guard<mutex> guard(encoder_mutex);
+	_init_state();
+
 	PackedByteArray encodedBytes;
+
+	if(encoder == nullptr)
+	{
+		WARN_PRINT("Opus Encoder: no encoder state");
+		return encodedBytes;
+	}
 
 	const int numPcmBytes = rawPcm.size();
 
@@ -182,9 +266,9 @@ PackedByteArray OpusEncoderNode::encode(const PackedByteArray &rawPcm)
 	}
 
 	// Down size our buffer to the required size
-	if(encodedBytes.size() > outPos+1)
+	if(encodedBytes.size() > outPos)
 	{
-		encodedBytes.resize(outPos+1);
+		encodedBytes.resize(outPos);
 	}
 
 	return encodedBytes;
@@ -200,10 +284,21 @@ void OpusEncoderNode::push_audio(const PackedVector2Array &frames)
 
 	// Per-sample copy so a double precision (REAL_T_IS_DOUBLE) build stays correct
 	streamBuffer.reserve(streamBuffer.size() + numFrames * channels);
-	for(int ii = 0; ii < numFrames; ++ii)
+	if(channels == 1)
 	{
-		streamBuffer.push_back(in[ii].x);
-		streamBuffer.push_back(in[ii].y);
+		// Downmix the stereo capture frames
+		for(int ii = 0; ii < numFrames; ++ii)
+		{
+			streamBuffer.push_back((in[ii].x + in[ii].y) * 0.5f);
+		}
+	}
+	else
+	{
+		for(int ii = 0; ii < numFrames; ++ii)
+		{
+			streamBuffer.push_back(in[ii].x);
+			streamBuffer.push_back(in[ii].y);
+		}
 	}
 
 	// Drop the oldest audio if the caller pushes without popping
@@ -228,6 +323,11 @@ PackedByteArray OpusEncoderNode::pop_packet()
 {
 	lock_guard<mutex> guard(encoder_mutex);
 	_init_state();
+
+	if(encoder == nullptr)
+	{
+		return PackedByteArray();
+	}
 
 	const int floatsPerFrame = frame_size * channels;
 	if((int)streamBuffer.size() < floatsPerFrame)
@@ -259,10 +359,13 @@ void OpusEncoderNode::reset_stream()
 
 	streamBuffer.clear();
 
-	int err = opus_encoder_ctl(encoder, OPUS_RESET_STATE);
-	if(err < 0)
+	if(encoder != nullptr)
 	{
-		WARN_PRINT(vformat("failed to reset encoder: %s", opus_strerror(err)));
+		int err = opus_encoder_ctl(encoder, OPUS_RESET_STATE);
+		if(err < 0)
+		{
+			WARN_PRINT(vformat("failed to reset encoder: %s", opus_strerror(err)));
+		}
 	}
 }
 
@@ -272,6 +375,18 @@ void OpusEncoderNode::_bind_methods()
 	ClassDB::bind_method(D_METHOD("set_bit_rate", "bit_rate"), &OpusEncoderNode::set_bit_rate);
 	ClassDB::bind_method(D_METHOD("get_bit_rate"), &OpusEncoderNode::get_bit_rate);
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "bit_rate"), "set_bit_rate", "get_bit_rate");
+
+	ClassDB::bind_method(D_METHOD("set_sample_rate", "sample_rate"), &OpusEncoderNode::set_sample_rate);
+	ClassDB::bind_method(D_METHOD("get_sample_rate"), &OpusEncoderNode::get_sample_rate);
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "sample_rate", PROPERTY_HINT_ENUM, "8000:8000,12000:12000,16000:16000,24000:24000,48000:48000"), "set_sample_rate", "get_sample_rate");
+
+	ClassDB::bind_method(D_METHOD("set_channels", "channels"), &OpusEncoderNode::set_channels);
+	ClassDB::bind_method(D_METHOD("get_channels"), &OpusEncoderNode::get_channels);
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "channels", PROPERTY_HINT_ENUM, "Mono:1,Stereo:2"), "set_channels", "get_channels");
+
+	ClassDB::bind_method(D_METHOD("set_application", "application"), &OpusEncoderNode::set_application);
+	ClassDB::bind_method(D_METHOD("get_application"), &OpusEncoderNode::get_application);
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "application", PROPERTY_HINT_ENUM, "VOIP:2048,Audio:2049,Low Delay:2051"), "set_application", "get_application");
 
 	ClassDB::bind_method(D_METHOD("encode", "raw_pcm"), &OpusEncoderNode::encode);
 

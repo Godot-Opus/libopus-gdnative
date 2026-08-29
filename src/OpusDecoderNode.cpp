@@ -25,7 +25,11 @@ OpusDecoderNode::OpusDecoderNode()
 	channels = DEFAULT_CHANNELS;
 }
 
-OpusDecoderNode::~OpusDecoderNode() = default;
+OpusDecoderNode::~OpusDecoderNode()
+{
+	lock_guard<mutex> guard(decoder_mutex);
+	_free_state();
+}
 
 void OpusDecoderNode::_ready()
 {
@@ -42,21 +46,23 @@ void OpusDecoderNode::_init_state()
 	max_frame_size = frame_size * 6;
 
 	outBuffSize = max_frame_size * channels;
+	delete[] outBuff;
 	outBuff = new opus_int16[outBuffSize];
+	delete[] floatOutBuff;
 	floatOutBuff = new float[outBuffSize];
 
 	int err;
 	decoder = opus_decoder_create(sample_rate, channels, &err);
-	if(err < 0)
+	if(err < 0 || decoder == nullptr)
 	{
 		WARN_PRINT(vformat("failed to create decoder: %s", opus_strerror(err)));
+		decoder = nullptr;
 	}
 }
 
-void OpusDecoderNode::_exit_tree()
+// Must be called with decoder_mutex held
+void OpusDecoderNode::_free_state()
 {
-	lock_guard <mutex> guard(decoder_mutex);
-
 	if(decoder != nullptr)
 	{
 		opus_decoder_destroy(decoder);
@@ -70,11 +76,68 @@ void OpusDecoderNode::_exit_tree()
 	floatOutBuff = nullptr;
 }
 
-PackedByteArray OpusDecoderNode::decode(const PackedByteArray &opusEncoded)
+void OpusDecoderNode::_exit_tree()
+{
+	lock_guard <mutex> guard(decoder_mutex);
+	_free_state();
+}
+
+void OpusDecoderNode::set_sample_rate(int p_sample_rate)
 {
 	lock_guard<mutex> guard(decoder_mutex);
 
+	if(p_sample_rate != 8000 && p_sample_rate != 12000 && p_sample_rate != 16000
+		&& p_sample_rate != 24000 && p_sample_rate != 48000)
+	{
+		WARN_PRINT("Opus supports sample rates of 8000, 12000, 16000, 24000 or 48000 Hz");
+		return;
+	}
+
+	if(p_sample_rate == sample_rate) return;
+
+	sample_rate = p_sample_rate;
+	// State is recreated with the new configuration on the next call
+	_free_state();
+}
+
+int OpusDecoderNode::get_sample_rate() const
+{
+	return sample_rate;
+}
+
+void OpusDecoderNode::set_channels(int p_channels)
+{
+	lock_guard<mutex> guard(decoder_mutex);
+
+	if(p_channels != 1 && p_channels != 2)
+	{
+		WARN_PRINT("Opus supports 1 or 2 channels");
+		return;
+	}
+
+	if(p_channels == channels) return;
+
+	channels = p_channels;
+	_free_state();
+}
+
+int OpusDecoderNode::get_channels() const
+{
+	return channels;
+}
+
+PackedByteArray OpusDecoderNode::decode(const PackedByteArray &opusEncoded)
+{
+	lock_guard<mutex> guard(decoder_mutex);
+	_init_state();
+
 	PackedByteArray decodedPcm;
+
+	if(decoder == nullptr)
+	{
+		WARN_PRINT("Opus Decoder: no decoder state");
+		return decodedPcm;
+	}
 
 	const int numInputBytes = opusEncoded.size();
 
@@ -97,8 +160,9 @@ PackedByteArray OpusDecoderNode::decode(const PackedByteArray &opusEncoded)
 	// Keep track of how far into the output buffer we are
 	int outByteMark = 0;
 
-	bool done = false;
-	while(!done)
+	// Each pass needs a 4 byte header plus at least 1 data byte. Streams from older
+	// encoder versions carry one trailing garbage byte, which this also skips.
+	while(numInputBytes - byteMark >= 5)
 	{
 		// Clear the buffers
 		memset(outBuff, 0, outBuffSize * sizeof(opus_int16));
@@ -111,7 +175,7 @@ PackedByteArray OpusDecoderNode::decode(const PackedByteArray &opusEncoded)
 		byteMark += 4; // Move past the packet size
 
 		// Very unintelligent sanity check to make sure our packet size header wasn't corrupt
-		if(packetSize <= 0 || packetSize > 2048)
+		if(packetSize <= 0 || packetSize > 2048 || packetSize > numInputBytes - byteMark)
 		{
 			WARN_PRINT("Bad packet size, exiting.");
 			break;
@@ -121,12 +185,6 @@ PackedByteArray OpusDecoderNode::decode(const PackedByteArray &opusEncoded)
 		const unsigned char *inData = &compressedBytes[byteMark];
 
 		byteMark += packetSize; // move past the packet
-
-		// If this is the last packet, we will exit when we finish this pass
-		if(byteMark >= numInputBytes - 5)
-		{
-			done = true;
-		}
 
 		// Decode the current opus packet
 		int out_frame_size = opus_decode(decoder, inData, packetSize, outBuff, max_frame_size, 0);
@@ -151,9 +209,9 @@ PackedByteArray OpusDecoderNode::decode(const PackedByteArray &opusEncoded)
 	}
 
 	// Down size our buffer to the required size
-	if(decodedPcm.size() > outByteMark+1)
+	if(decodedPcm.size() > outByteMark)
 	{
-		decodedPcm.resize(outByteMark+1);
+		decodedPcm.resize(outByteMark);
 	}
 
 	return decodedPcm;
@@ -173,9 +231,20 @@ PackedVector2Array OpusDecoderNode::_decode_float_packet(const unsigned char *da
 
 	frames.resize(out_frame_size);
 	Vector2 *out = frames.ptrw();
-	for(int ii = 0; ii < out_frame_size; ++ii)
+	if(channels == 1)
 	{
-		out[ii] = Vector2(floatOutBuff[ii * 2], floatOutBuff[ii * 2 + 1]);
+		// Duplicate the mono signal into both channels
+		for(int ii = 0; ii < out_frame_size; ++ii)
+		{
+			out[ii] = Vector2(floatOutBuff[ii], floatOutBuff[ii]);
+		}
+	}
+	else
+	{
+		for(int ii = 0; ii < out_frame_size; ++ii)
+		{
+			out[ii] = Vector2(floatOutBuff[ii * 2], floatOutBuff[ii * 2 + 1]);
+		}
 	}
 
 	return frames;
@@ -185,6 +254,11 @@ PackedVector2Array OpusDecoderNode::decode_frame(const PackedByteArray &packet)
 {
 	lock_guard<mutex> guard(decoder_mutex);
 	_init_state();
+
+	if(decoder == nullptr)
+	{
+		return PackedVector2Array();
+	}
 
 	const int packetSize = packet.size();
 	if(packetSize <= 0 || packetSize > MAX_PACKET_SIZE)
@@ -201,6 +275,11 @@ PackedVector2Array OpusDecoderNode::decode_dropped()
 	lock_guard<mutex> guard(decoder_mutex);
 	_init_state();
 
+	if(decoder == nullptr)
+	{
+		return PackedVector2Array();
+	}
+
 	return _decode_float_packet(nullptr, 0, frame_size);
 }
 
@@ -208,6 +287,11 @@ void OpusDecoderNode::reset_stream()
 {
 	lock_guard<mutex> guard(decoder_mutex);
 	_init_state();
+
+	if(decoder == nullptr)
+	{
+		return;
+	}
 
 	int err = opus_decoder_ctl(decoder, OPUS_RESET_STATE);
 	if(err < 0)
@@ -220,6 +304,14 @@ void OpusDecoderNode::reset_stream()
 void OpusDecoderNode::_bind_methods()
 {
 	ClassDB::bind_method(D_METHOD("decode", "opus_encoded"), &OpusDecoderNode::decode);
+
+	ClassDB::bind_method(D_METHOD("set_sample_rate", "sample_rate"), &OpusDecoderNode::set_sample_rate);
+	ClassDB::bind_method(D_METHOD("get_sample_rate"), &OpusDecoderNode::get_sample_rate);
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "sample_rate", PROPERTY_HINT_ENUM, "8000:8000,12000:12000,16000:16000,24000:24000,48000:48000"), "set_sample_rate", "get_sample_rate");
+
+	ClassDB::bind_method(D_METHOD("set_channels", "channels"), &OpusDecoderNode::set_channels);
+	ClassDB::bind_method(D_METHOD("get_channels"), &OpusDecoderNode::get_channels);
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "channels", PROPERTY_HINT_ENUM, "Mono:1,Stereo:2"), "set_channels", "get_channels");
 
 	ClassDB::bind_method(D_METHOD("decode_frame", "packet"), &OpusDecoderNode::decode_frame);
 	ClassDB::bind_method(D_METHOD("decode_dropped"), &OpusDecoderNode::decode_dropped);

@@ -33,6 +33,7 @@ namespace opus
 		std::mutex encoder_mutex;
 
 		void _init_state();
+		void _free_state();
 
 		/**
 		 * Size of each PCM frame in number of samples
@@ -57,6 +58,15 @@ namespace opus
 
 		void set_bit_rate(int p_bit_rate);
 		int get_bit_rate() const;
+
+		void set_sample_rate(int p_sample_rate);
+		int get_sample_rate() const;
+
+		void set_channels(int p_channels);
+		int get_channels() const;
+
+		void set_application(int p_application);
+		int get_application() const;
 
 		godot::PackedByteArray encode(const godot::PackedByteArray &rawPcm);
 

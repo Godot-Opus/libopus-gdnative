@@ -28,6 +28,7 @@ namespace opus
 		std::mutex decoder_mutex;
 
 		void _init_state();
+		void _free_state();
 		godot::PackedVector2Array _decode_float_packet(const unsigned char *data, int dataSize, int maxFrames);
 
 		int sample_rate;
@@ -43,6 +44,12 @@ namespace opus
 
 		void _ready() override;
 		void _exit_tree() override;
+
+		void set_sample_rate(int p_sample_rate);
+		int get_sample_rate() const;
+
+		void set_channels(int p_channels);
+		int get_channels() const;
 
 		godot::PackedByteArray decode(const godot::PackedByteArray &opusEncoded);
 
