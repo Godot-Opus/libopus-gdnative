@@ -6,8 +6,10 @@
 #define OPUS_GDNATIVE_OPUS_H
 
 #include <mutex>
+#include <vector>
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/variant/packed_byte_array.hpp>
+#include <godot_cpp/variant/packed_vector2_array.hpp>
 #include <opus.h>
 #include "Values.h"
 
@@ -23,7 +25,14 @@ namespace opus
 		opus_int16 *inputSamples = nullptr;
 		unsigned char outBuff[sizeof(opus_int16) * MAX_PACKET_SIZE];
 
+		/**
+		 * Interleaved stereo float samples accumulated for the streaming path
+		 */
+		std::vector<float> streamBuffer;
+
 		std::mutex encoder_mutex;
+
+		void _init_state();
 
 		/**
 		 * Size of each PCM frame in number of samples
@@ -50,6 +59,11 @@ namespace opus
 		int get_bit_rate() const;
 
 		godot::PackedByteArray encode(const godot::PackedByteArray &rawPcm);
+
+		void push_audio(const godot::PackedVector2Array &frames);
+		bool has_packet();
+		godot::PackedByteArray pop_packet();
+		void reset_stream();
 	};
 }
 

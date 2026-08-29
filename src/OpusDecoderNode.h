@@ -8,6 +8,7 @@
 #include <mutex>
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/variant/packed_byte_array.hpp>
+#include <godot_cpp/variant/packed_vector2_array.hpp>
 #include <opus.h>
 
 namespace opus
@@ -22,8 +23,12 @@ namespace opus
 		OpusDecoder *decoder = nullptr;
 		int outBuffSize;
 		opus_int16 *outBuff = nullptr;
+		float *floatOutBuff = nullptr;
 
 		std::mutex decoder_mutex;
+
+		void _init_state();
+		godot::PackedVector2Array _decode_float_packet(const unsigned char *data, int dataSize, int maxFrames);
 
 		int sample_rate;
 		int pcm_channel_size;
@@ -40,6 +45,10 @@ namespace opus
 		void _exit_tree() override;
 
 		godot::PackedByteArray decode(const godot::PackedByteArray &opusEncoded);
+
+		godot::PackedVector2Array decode_frame(const godot::PackedByteArray &packet);
+		godot::PackedVector2Array decode_dropped();
+		void reset_stream();
 	};
 }
 

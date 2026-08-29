@@ -30,12 +30,20 @@ OpusDecoderNode::~OpusDecoderNode() = default;
 void OpusDecoderNode::_ready()
 {
 	lock_guard <mutex> guard(decoder_mutex);
+	_init_state();
+}
+
+// Must be called with decoder_mutex held
+void OpusDecoderNode::_init_state()
+{
+	if(decoder != nullptr) return;
 
 	frame_size = sample_rate / 50; // We want a 20ms window
 	max_frame_size = frame_size * 6;
 
 	outBuffSize = max_frame_size * channels;
 	outBuff = new opus_int16[outBuffSize];
+	floatOutBuff = new float[outBuffSize];
 
 	int err;
 	decoder = opus_decoder_create(sample_rate, channels, &err);
@@ -57,6 +65,9 @@ void OpusDecoderNode::_exit_tree()
 
 	delete[] outBuff;
 	outBuff = nullptr;
+
+	delete[] floatOutBuff;
+	floatOutBuff = nullptr;
 }
 
 PackedByteArray OpusDecoderNode::decode(const PackedByteArray &opusEncoded)
@@ -148,8 +159,69 @@ PackedByteArray OpusDecoderNode::decode(const PackedByteArray &opusEncoded)
 	return decodedPcm;
 }
 
+// Must be called with decoder_mutex held. data == nullptr runs packet loss concealment
+PackedVector2Array OpusDecoderNode::_decode_float_packet(const unsigned char *data, int dataSize, int maxFrames)
+{
+	PackedVector2Array frames;
+
+	int out_frame_size = opus_decode_float(decoder, data, dataSize, floatOutBuff, maxFrames, 0);
+	if(out_frame_size < 0)
+	{
+		WARN_PRINT(vformat("decoder failed: %s", opus_strerror(out_frame_size)));
+		return frames;
+	}
+
+	frames.resize(out_frame_size);
+	Vector2 *out = frames.ptrw();
+	for(int ii = 0; ii < out_frame_size; ++ii)
+	{
+		out[ii] = Vector2(floatOutBuff[ii * 2], floatOutBuff[ii * 2 + 1]);
+	}
+
+	return frames;
+}
+
+PackedVector2Array OpusDecoderNode::decode_frame(const PackedByteArray &packet)
+{
+	lock_guard<mutex> guard(decoder_mutex);
+	_init_state();
+
+	const int packetSize = packet.size();
+	if(packetSize <= 0 || packetSize > MAX_PACKET_SIZE)
+	{
+		WARN_PRINT("Opus Decoder: bad packet size");
+		return PackedVector2Array();
+	}
+
+	return _decode_float_packet(packet.ptr(), packetSize, max_frame_size);
+}
+
+PackedVector2Array OpusDecoderNode::decode_dropped()
+{
+	lock_guard<mutex> guard(decoder_mutex);
+	_init_state();
+
+	return _decode_float_packet(nullptr, 0, frame_size);
+}
+
+void OpusDecoderNode::reset_stream()
+{
+	lock_guard<mutex> guard(decoder_mutex);
+	_init_state();
+
+	int err = opus_decoder_ctl(decoder, OPUS_RESET_STATE);
+	if(err < 0)
+	{
+		WARN_PRINT(vformat("failed to reset decoder: %s", opus_strerror(err)));
+	}
+}
+
 
 void OpusDecoderNode::_bind_methods()
 {
 	ClassDB::bind_method(D_METHOD("decode", "opus_encoded"), &OpusDecoderNode::decode);
+
+	ClassDB::bind_method(D_METHOD("decode_frame", "packet"), &OpusDecoderNode::decode_frame);
+	ClassDB::bind_method(D_METHOD("decode_dropped"), &OpusDecoderNode::decode_dropped);
+	ClassDB::bind_method(D_METHOD("reset_stream"), &OpusDecoderNode::reset_stream);
 }
