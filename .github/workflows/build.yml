@@ -23,10 +23,11 @@ jobs:
             arch: x86_64
             bin-dir: linux
           - name: windows (x86_64)
-            os: windows-latest
+            os: ubuntu-22.04
             platform: windows
             arch: x86_64
             bin-dir: windows
+            scons-extra: use_mingw=yes
           - name: macos (universal)
             os: macos-latest
             platform: macos
@@ -50,16 +51,13 @@ jobs:
       - name: Install scons and ninja
         run: pip install scons ninja
 
-      - name: Set up MSVC environment
+      - name: Install mingw
         if: matrix.platform == 'windows'
-        uses: ilammy/msvc-dev-cmd@v1
+        run: sudo apt-get update && sudo apt-get install -y mingw-w64
 
-      - name: Set up Android NDK
+      - name: Install Android NDK
         if: matrix.platform == 'android'
-        id: setup-ndk
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r23c
+        run: sdkmanager --install "ndk;23.2.8568313"
 
       - name: Build opus
         shell: bash
@@ -69,28 +67,20 @@ jobs:
           if [ "${{ matrix.platform }}" = "macos" ]; then
             EXTRA_FLAGS='-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64'
           elif [ "${{ matrix.platform }}" = "windows" ]; then
-            EXTRA_FLAGS='-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded'
+            EXTRA_FLAGS='-DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_PROCESSOR=x86_64 -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_RC_COMPILER=x86_64-w64-mingw32-windres'
           elif [ "${{ matrix.platform }}" = "android" ]; then
-            EXTRA_FLAGS="-DCMAKE_TOOLCHAIN_FILE=${{ steps.setup-ndk.outputs.ndk-path }}/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21"
+            EXTRA_FLAGS="-DCMAKE_TOOLCHAIN_FILE=$ANDROID_HOME/ndk/23.2.8568313/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21"
           fi
           cmake -S thirdparty/opus -B "$BUILD_DIR" -G Ninja $OPUS_CMAKE_FLAGS $EXTRA_FLAGS
           cmake --build "$BUILD_DIR"
 
       - name: Build extension (debug)
         shell: bash
-        env:
-          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
-        run: |
-          if [ "${{ matrix.platform }}" = "android" ]; then unset ANDROID_HOME; fi
-          scons platform=${{ matrix.platform }} target=template_debug arch=${{ matrix.arch }}
+        run: scons platform=${{ matrix.platform }} target=template_debug arch=${{ matrix.arch }} ${{ matrix.scons-extra }}
 
       - name: Build extension (release)
         shell: bash
-        env:
-          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
-        run: |
-          if [ "${{ matrix.platform }}" = "android" ]; then unset ANDROID_HOME; fi
-          scons platform=${{ matrix.platform }} target=template_release arch=${{ matrix.arch }}
+        run: scons platform=${{ matrix.platform }} target=template_release arch=${{ matrix.arch }} ${{ matrix.scons-extra }}
 
       - name: Stage addon binaries
         shell: bash
