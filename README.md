@@ -15,7 +15,7 @@ This extension adds 2 nodes to Godot:
   - `channels` : 1 or 2 (default 2).
   - `application` : Opus application constant, `OPUS_APPLICATION_VOIP` (2048, default), `OPUS_APPLICATION_AUDIO` (2049) or `OPUS_APPLICATION_RESTRICTED_LOWDELAY` (2051).
 - OpusDecoderNode
-  - `decode(opus_encoded)` : Accepts a `PackedByteArray` of Opus data Packets packed in our custom interleaved format. Returns raw 16bit stereo PCM data at 48kHz.
+  - `decode(opus_encoded)` : Accepts a `PackedByteArray` of Opus data Packets packed in our custom interleaved format. Returns raw 16bit PCM data at the configured sample rate and channel count.
   - `sample_rate` / `channels` : Same as the encoder; both sides must agree.
 
 Changing `sample_rate`, `channels` or `application` recreates the codec state, so set them before use (or between talk bursts). With `channels = 1` the streaming API downmixes the stereo capture frames on encode and duplicates the mono signal into both channels on decode. The nodes do not need to be inside the scene tree; state is created lazily on first use.
@@ -24,11 +24,11 @@ Changing `sample_rate`, `channels` or `application` recreates the codec state, s
 
 ## Streaming API
 
-For true live streaming (push-to-talk VOIP), both nodes also expose a per-frame API designed to sit between Godot 4's `AudioEffectCapture` and `AudioStreamGenerator`. It requires the project mix rate to be 48kHz (`audio/driver/mix_rate=48000`), since Opus does not accept 44.1kHz and no resampling is performed.
+For true live streaming (push-to-talk VOIP), both nodes also expose a per-frame API designed to sit between Godot 4's `AudioEffectCapture` and `AudioStreamGenerator`. The project mix rate must match the encoder's `sample_rate` (`audio/driver/mix_rate=48000` for the default), since Opus does not accept Godot's default 44.1kHz and no resampling is performed; the encoder warns at init when they disagree.
 
 - OpusEncoderNode
   - `push_audio(frames)` : Accepts a `PackedVector2Array` of stereo float frames (as returned by `AudioEffectCapture.get_buffer()`), any length. Frames accumulate internally; at most 1 second is buffered before the oldest audio is dropped.
-  - `has_packet()` : Returns `true` once at least one 20ms frame (960 samples) is buffered.
+  - `has_packet()` : Returns `true` once at least one 20ms frame (960 samples at 48kHz) is buffered.
   - `pop_packet()` : Encodes one 20ms frame and returns it as a single raw Opus packet (`PackedByteArray`, no length header). Returns an empty array if not enough audio is buffered.
   - `reset_stream()` : Resets the encoder state and clears buffered audio. Call when a new talk burst starts.
 - OpusDecoderNode
