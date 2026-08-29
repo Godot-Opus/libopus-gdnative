@@ -1,0 +1,147 @@
+name: Build
+
+on: [push, pull_request]
+
+env:
+  OPUS_CMAKE_FLAGS: >-
+    -DCMAKE_BUILD_TYPE=Release
+    -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+    -DOPUS_BUILD_PROGRAMS=OFF
+    -DOPUS_BUILD_TESTING=OFF
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux (x86_64)
+            os: ubuntu-22.04
+            platform: linux
+            arch: x86_64
+            bin-dir: linux
+          - name: windows (x86_64)
+            os: windows-latest
+            platform: windows
+            arch: x86_64
+            bin-dir: windows
+          - name: macos (universal)
+            os: macos-latest
+            platform: macos
+            arch: universal
+            bin-dir: macos
+          - name: android (arm64)
+            os: ubuntu-latest
+            platform: android
+            arch: arm64
+            bin-dir: android
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install scons and ninja
+        run: pip install scons ninja
+
+      - name: Set up MSVC environment
+        if: matrix.platform == 'windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Set up Android NDK
+        if: matrix.platform == 'android'
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r23c
+
+      - name: Build opus
+        shell: bash
+        run: |
+          BUILD_DIR="thirdparty/opus/build/${{ matrix.platform }}.${{ matrix.arch }}"
+          EXTRA_FLAGS=""
+          if [ "${{ matrix.platform }}" = "macos" ]; then
+            EXTRA_FLAGS='-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64'
+          elif [ "${{ matrix.platform }}" = "windows" ]; then
+            EXTRA_FLAGS='-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded'
+          elif [ "${{ matrix.platform }}" = "android" ]; then
+            EXTRA_FLAGS="-DCMAKE_TOOLCHAIN_FILE=${{ steps.setup-ndk.outputs.ndk-path }}/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21"
+          fi
+          cmake -S thirdparty/opus -B "$BUILD_DIR" -G Ninja $OPUS_CMAKE_FLAGS $EXTRA_FLAGS
+          cmake --build "$BUILD_DIR"
+
+      - name: Build extension (debug)
+        shell: bash
+        env:
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          if [ "${{ matrix.platform }}" = "android" ]; then unset ANDROID_HOME; fi
+          scons platform=${{ matrix.platform }} target=template_debug arch=${{ matrix.arch }}
+
+      - name: Build extension (release)
+        shell: bash
+        env:
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          if [ "${{ matrix.platform }}" = "android" ]; then unset ANDROID_HOME; fi
+          scons platform=${{ matrix.platform }} target=template_release arch=${{ matrix.arch }}
+
+      - name: Stage addon binaries
+        shell: bash
+        run: |
+          mkdir -p artifact/addons/opus/bin/${{ matrix.bin-dir }}
+          cp -r bin/* artifact/addons/opus/bin/${{ matrix.bin-dir }}/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opus-${{ matrix.platform }}-${{ matrix.arch }}
+          path: artifact
+
+  package:
+    name: package addon
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Assemble addon
+        run: |
+          mkdir -p package/addons/opus
+          cp -r artifacts/addons/opus/* package/addons/opus/
+          cp addon/opus.gdextension addon/ic_encoder.png addon/ic_decoder.png package/addons/opus/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: godot-opus-addon
+          path: package
+
+  release:
+    name: attach release zip
+    runs-on: ubuntu-latest
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: godot-opus-addon
+          path: package
+
+      - name: Zip addon
+        run: cd package && zip -r ../godot-opus-${{ github.ref_name }}.zip addons
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: godot-opus-${{ github.ref_name }}.zip
