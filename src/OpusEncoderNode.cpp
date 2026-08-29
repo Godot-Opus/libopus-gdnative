@@ -34,6 +34,13 @@ OpusEncoderNode::~OpusEncoderNode()
 void OpusEncoderNode::_ready()
 {
 	lock_guard<mutex> guard(encoder_mutex);
+	_init_state();
+}
+
+// Must be called with encoder_mutex held
+void OpusEncoderNode::_init_state()
+{
+	if(encoder != nullptr) return;
 
 	int err;
 
@@ -183,6 +190,81 @@ PackedByteArray OpusEncoderNode::encode(const PackedByteArray &rawPcm)
 	return encodedBytes;
 }
 
+void OpusEncoderNode::push_audio(const PackedVector2Array &frames)
+{
+	lock_guard<mutex> guard(encoder_mutex);
+	_init_state();
+
+	const int numFrames = frames.size();
+	const Vector2 *in = frames.ptr();
+
+	// Per-sample copy so a double precision (REAL_T_IS_DOUBLE) build stays correct
+	streamBuffer.reserve(streamBuffer.size() + numFrames * channels);
+	for(int ii = 0; ii < numFrames; ++ii)
+	{
+		streamBuffer.push_back(in[ii].x);
+		streamBuffer.push_back(in[ii].y);
+	}
+
+	// Drop the oldest audio if the caller pushes without popping
+	const size_t maxBufferedFloats = (size_t)MAX_BUFFERED_SAMPLES * channels;
+	if(streamBuffer.size() > maxBufferedFloats)
+	{
+		const size_t overflow = streamBuffer.size() - maxBufferedFloats;
+		streamBuffer.erase(streamBuffer.begin(), streamBuffer.begin() + overflow);
+		WARN_PRINT("Opus Encoder: stream buffer overflowed, dropping oldest audio");
+	}
+}
+
+bool OpusEncoderNode::has_packet()
+{
+	lock_guard<mutex> guard(encoder_mutex);
+	_init_state();
+
+	return (int)streamBuffer.size() >= frame_size * channels;
+}
+
+PackedByteArray OpusEncoderNode::pop_packet()
+{
+	lock_guard<mutex> guard(encoder_mutex);
+	_init_state();
+
+	const int floatsPerFrame = frame_size * channels;
+	if((int)streamBuffer.size() < floatsPerFrame)
+	{
+		return PackedByteArray();
+	}
+
+	int opusPacketSize = opus_encode_float(encoder, streamBuffer.data(), frame_size, outBuff, MAX_PACKET_SIZE);
+
+	// Consume the frame even on failure so a bad frame can't wedge the stream
+	streamBuffer.erase(streamBuffer.begin(), streamBuffer.begin() + floatsPerFrame);
+
+	if(opusPacketSize < 0)
+	{
+		WARN_PRINT(vformat("encode failed: %s!", opus_strerror(opusPacketSize)));
+		return PackedByteArray();
+	}
+
+	PackedByteArray packet;
+	packet.resize(opusPacketSize);
+	memcpy(packet.ptrw(), outBuff, opusPacketSize);
+	return packet;
+}
+
+void OpusEncoderNode::reset_stream()
+{
+	lock_guard<mutex> guard(encoder_mutex);
+	_init_state();
+
+	streamBuffer.clear();
+
+	int err = opus_encoder_ctl(encoder, OPUS_RESET_STATE);
+	if(err < 0)
+	{
+		WARN_PRINT(vformat("failed to reset encoder: %s", opus_strerror(err)));
+	}
+}
 
 
 void OpusEncoderNode::_bind_methods()
@@ -192,4 +274,9 @@ void OpusEncoderNode::_bind_methods()
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "bit_rate"), "set_bit_rate", "get_bit_rate");
 
 	ClassDB::bind_method(D_METHOD("encode", "raw_pcm"), &OpusEncoderNode::encode);
+
+	ClassDB::bind_method(D_METHOD("push_audio", "frames"), &OpusEncoderNode::push_audio);
+	ClassDB::bind_method(D_METHOD("has_packet"), &OpusEncoderNode::has_packet);
+	ClassDB::bind_method(D_METHOD("pop_packet"), &OpusEncoderNode::pop_packet);
+	ClassDB::bind_method(D_METHOD("reset_stream"), &OpusEncoderNode::reset_stream);
 }

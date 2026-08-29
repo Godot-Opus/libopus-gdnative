@@ -13,6 +13,9 @@ constexpr int DEFAULT_SAMPLE_RATE = 48000;
 constexpr int DEFAULT_BITRATE = 15000;
 constexpr int DEFAULT_CHANNELS = 2;
 
+// Streaming: cap the encoder accumulation buffer at 1 second of audio
+constexpr int MAX_BUFFERED_SAMPLES = DEFAULT_SAMPLE_RATE;
+
 union Bytes4
 {
 	opus_int32 integer;
