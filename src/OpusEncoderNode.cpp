@@ -213,24 +213,13 @@ PackedByteArray OpusEncoderNode::encode(const PackedByteArray &rawPcm)
 
 	int inMarkPos = 0;
 	int outPos = 0;
-	bool done = false;
-	while(!done)
+	while(remainingSamples > 0)
 	{
 		// Clear the input buffer
 		memset(inputSamples, 0, inputSamplesSize*sizeof(opus_int16));
 
-		int curFrameSize;
-		if(remainingSamples >= frame_size)
-		{
-			curFrameSize = frame_size;
-		}
-		else
-		{
-			curFrameSize = remainingSamples;
-			// We are processing the last batch of samples,
-			// terminate after this pass
-			done = true;
-		}
+		// A partial final frame is encoded zero padded
+		const int curFrameSize = remainingSamples >= frame_size ? frame_size : remainingSamples;
 
 		// Copy the input samples into our buffer. This is important because opus_encode() wants
 		// to read a full frame_size worth of data. If we have less than a full frame at the end, it would
