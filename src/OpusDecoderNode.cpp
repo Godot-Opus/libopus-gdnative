@@ -6,15 +6,16 @@
 #include "Values.h"
 #include "Utils.h"
 
+#include <godot_cpp/core/class_db.hpp>
+#include <godot_cpp/variant/variant.hpp>
+
+#include <cstring>
+
 using namespace std;
 using namespace opus;
 using namespace godot;
 
-OpusDecoderNode::OpusDecoderNode() = default;
-
-OpusDecoderNode::~OpusDecoderNode() = default;
-
-void OpusDecoderNode::_init()
+OpusDecoderNode::OpusDecoderNode()
 {
 	frame_size = 0;
 	max_frame_size = 0;
@@ -23,6 +24,8 @@ void OpusDecoderNode::_init()
 	pcm_channel_size = sizeof(opus_uint16);
 	channels = DEFAULT_CHANNELS;
 }
+
+OpusDecoderNode::~OpusDecoderNode() = default;
 
 void OpusDecoderNode::_ready()
 {
@@ -38,7 +41,7 @@ void OpusDecoderNode::_ready()
 	decoder = opus_decoder_create(sample_rate, channels, &err);
 	if(err < 0)
 	{
-		Godot::print("failed to create decoder: {0}\n", opus_strerror(err));
+		WARN_PRINT(vformat("failed to create decoder: %s", opus_strerror(err)));
 	}
 }
 
@@ -56,11 +59,11 @@ void OpusDecoderNode::_exit_tree()
 	outBuff = nullptr;
 }
 
-PoolByteArray OpusDecoderNode::decode(const PoolByteArray opusEncoded)
+PackedByteArray OpusDecoderNode::decode(const PackedByteArray &opusEncoded)
 {
 	lock_guard<mutex> guard(decoder_mutex);
 
-	PoolByteArray decodedPcm;
+	PackedByteArray decodedPcm;
 
 	const int numInputBytes = opusEncoded.size();
 
@@ -76,8 +79,7 @@ PoolByteArray OpusDecoderNode::decode(const PoolByteArray opusEncoded)
 	const int initialOutputSize = max_frame_size_bytes * framesPerSecond;
 	decodedPcm.resize(initialOutputSize);
 
-	const PoolByteArray::Read read = opusEncoded.read();
-	const unsigned char *compressedBytes = read.ptr();
+	const unsigned char *compressedBytes = opusEncoded.ptr();
 
 	// How far into the inptu buffer we are
 	int byteMark = 0;
@@ -88,7 +90,7 @@ PoolByteArray OpusDecoderNode::decode(const PoolByteArray opusEncoded)
 	while(!done)
 	{
 		// Clear the buffers
-		memset(outBuff, 0, outBuffSize);
+		memset(outBuff, 0, outBuffSize * sizeof(opus_int16));
 
 		// Parse out packet size
 		Bytes4 b{0};
@@ -119,7 +121,7 @@ PoolByteArray OpusDecoderNode::decode(const PoolByteArray opusEncoded)
 		int out_frame_size = opus_decode(decoder, inData, packetSize, outBuff, max_frame_size, 0);
 		if(out_frame_size < 0)
 		{
-			WARN_PRINT(String("decoder failed: {0}").format(Array::make(opus_strerror(out_frame_size))));
+			WARN_PRINT(vformat("decoder failed: %s", opus_strerror(out_frame_size)));
 			break;
 		}
 
@@ -129,7 +131,7 @@ PoolByteArray OpusDecoderNode::decode(const PoolByteArray opusEncoded)
 
 		// Copy the new data into the output buffer
 		ensure_buffer_size(decodedPcm, outByteMark, outBytesSize);
-		uint8_t *decodedBytes = decodedPcm.write().ptr();
+		uint8_t *decodedBytes = decodedPcm.ptrw();
 		uint8_t *targetArea = &(decodedBytes[outByteMark]);
 		memcpy(targetArea, outBytes, outBytesSize);
 
@@ -147,10 +149,7 @@ PoolByteArray OpusDecoderNode::decode(const PoolByteArray opusEncoded)
 }
 
 
-void OpusDecoderNode::_register_methods()
+void OpusDecoderNode::_bind_methods()
 {
-	register_method("_init", &OpusDecoderNode::_init);
-	register_method("_ready", &OpusDecoderNode::_ready);
-	register_method("_exit_tree", &OpusDecoderNode::_exit_tree);
-	register_method("decode", &OpusDecoderNode::decode);
+	ClassDB::bind_method(D_METHOD("decode", "opus_encoded"), &OpusDecoderNode::decode);
 }

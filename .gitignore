@@ -1,10 +1,12 @@
 bu
 cmake-build-debug
+.mcp.json
 *.dblite
 *.idb
 bin/*
 .idea
 *.o
+*.os
 CMakeFiles/
 CMakeCache.txt
 Logs/

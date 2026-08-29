@@ -6,17 +6,17 @@
 #define OPUS_GDNATIVE_OPUSDECODERNODE_H
 
 #include <mutex>
-#include <Godot.hpp>
-#include <Node.hpp>
+#include <godot_cpp/classes/node.hpp>
+#include <godot_cpp/variant/packed_byte_array.hpp>
 #include <opus.h>
 
 namespace opus
 {
 	class OpusDecoderNode : public godot::Node
 	{
-	private:
-	GODOT_CLASS(OpusDecoderNode, godot::Node)
+		GDCLASS(OpusDecoderNode, godot::Node)
 
+	private:
 		int frame_size;
 		int max_frame_size;
 		OpusDecoder *decoder = nullptr;
@@ -24,21 +24,22 @@ namespace opus
 		opus_int16 *outBuff = nullptr;
 
 		std::mutex decoder_mutex;
-	public:
+
 		int sample_rate;
 		int pcm_channel_size;
 		int channels;
 
+	protected:
+		static void _bind_methods();
+
+	public:
 		OpusDecoderNode();
 		~OpusDecoderNode();
 
-		void _init();
-		void _ready();
-		void _exit_tree();
+		void _ready() override;
+		void _exit_tree() override;
 
-		godot::PoolByteArray decode(const godot::PoolByteArray opusEncoded);
-
-		static void _register_methods();
+		godot::PackedByteArray decode(const godot::PackedByteArray &opusEncoded);
 	};
 }
 

@@ -6,12 +6,12 @@
 
 using namespace godot;
 
-void opus::increase_buffer(godot::PoolByteArray &buffer)
+void opus::increase_buffer(godot::PackedByteArray &buffer)
 {
 	buffer.resize(buffer.size() * 2);
 }
 
-bool opus::ensure_buffer_size(PoolByteArray &buffer, int usage, int spaceRequired)
+bool opus::ensure_buffer_size(PackedByteArray &buffer, int usage, int spaceRequired)
 {
 	bool wasResized;
 	if((buffer.size() - usage) < spaceRequired)

@@ -6,8 +6,8 @@
 #define OPUS_GDNATIVE_OPUS_H
 
 #include <mutex>
-#include <Godot.hpp>
-#include <Node.hpp>
+#include <godot_cpp/classes/node.hpp>
+#include <godot_cpp/variant/packed_byte_array.hpp>
 #include <opus.h>
 #include "Values.h"
 
@@ -15,9 +15,9 @@ namespace opus
 {
 	class OpusEncoderNode : public godot::Node
 	{
-	private:
-		GODOT_CLASS(OpusEncoderNode, godot::Node)
+		GDCLASS(OpusEncoderNode, godot::Node)
 
+	private:
 		OpusEncoder *encoder = nullptr;
 		int inputSamplesSize;
 		opus_int16 *inputSamples = nullptr;
@@ -34,20 +34,22 @@ namespace opus
 		int pcm_channel_size;
 		int channels;
 		int max_frame_size;
-	public:
 		int bit_rate;
 
+	protected:
+		static void _bind_methods();
+
+	public:
 		OpusEncoderNode();
 		~OpusEncoderNode();
 
-		void _init();
-		void _ready();
-		void _exit_tree();
+		void _ready() override;
+		void _exit_tree() override;
 
-		//godot::PoolByteArray resample_441kh_48kh(const godot::PoolByteArray &rawPcm);
-		godot::PoolByteArray encode(const godot::PoolByteArray rawPcm);
+		void set_bit_rate(int p_bit_rate);
+		int get_bit_rate() const;
 
-		static void _register_methods();
+		godot::PackedByteArray encode(const godot::PackedByteArray &rawPcm);
 	};
 }
 

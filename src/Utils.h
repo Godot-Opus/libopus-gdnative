@@ -5,7 +5,7 @@
 #ifndef OPUS_GDNATIVE_UTILS_H
 #define OPUS_GDNATIVE_UTILS_H
 
-#include <Godot.hpp>
+#include <godot_cpp/variant/packed_byte_array.hpp>
 
 namespace opus
 {
@@ -15,7 +15,7 @@ namespace opus
 	 * It's expensive.
 	 * @param encodedBytes Buffer who's size is to be doubled
 	 */
-	void increase_buffer(godot::PoolByteArray &buffer);
+	void increase_buffer(godot::PackedByteArray &buffer);
 
 	/**
 	 * Check the a buffer has space to add `spaceRequired` more bytes
@@ -23,7 +23,7 @@ namespace opus
 	 * @param usage How many bytes have already been used in the buffer
 	 * @param spaceRequired How many new bytes require space
 	 */
-	bool ensure_buffer_size(godot::PoolByteArray &buffer, int usage, int spaceRequired);
+	bool ensure_buffer_size(godot::PackedByteArray &buffer, int usage, int spaceRequired);
 }
 
 #endif //OPUS_GDNATIVE_UTILS_H

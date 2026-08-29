@@ -6,21 +6,16 @@
 #include "Values.h"
 #include "Utils.h"
 
+#include <godot_cpp/core/class_db.hpp>
+#include <godot_cpp/variant/variant.hpp>
+
+#include <cstring>
+
 using namespace std;
 using namespace opus;
 using namespace godot;
 
 OpusEncoderNode::OpusEncoderNode() : Node()
-{
-
-}
-
-OpusEncoderNode::~OpusEncoderNode()
-{
-
-}
-
-void OpusEncoderNode::_init()
 {
 	application = OPUS_APPLICATION_VOIP;
 	sample_rate = DEFAULT_SAMPLE_RATE;
@@ -29,6 +24,11 @@ void OpusEncoderNode::_init()
 	frame_size = 0;
 
 	pcm_channel_size = sizeof(opus_uint16);
+}
+
+OpusEncoderNode::~OpusEncoderNode()
+{
+
 }
 
 void OpusEncoderNode::_ready()
@@ -47,13 +47,13 @@ void OpusEncoderNode::_ready()
 	encoder = opus_encoder_create(sample_rate, channels, application, &err);
 	if(err < 0)
 	{
-		WARN_PRINT(String().format("failed to create an encoder: %s\n", opus_strerror(err)));
+		WARN_PRINT(vformat("failed to create an encoder: %s", opus_strerror(err)));
 	}
 
 	err = opus_encoder_ctl(encoder, OPUS_SET_BITRATE(bit_rate));
 	if(err < 0)
 	{
-		WARN_PRINT(String().format("failed to set bitrate: {0}\n", opus_strerror(err)));
+		WARN_PRINT(vformat("failed to set bitrate: %s", opus_strerror(err)));
 	}
 }
 
@@ -71,11 +71,32 @@ void OpusEncoderNode::_exit_tree()
 	inputSamples = nullptr;
 }
 
-PoolByteArray OpusEncoderNode::encode(const PoolByteArray rawPcm)
+void OpusEncoderNode::set_bit_rate(int p_bit_rate)
 {
 	lock_guard<mutex> guard(encoder_mutex);
 
-	PoolByteArray encodedBytes;
+	bit_rate = p_bit_rate;
+
+	if(encoder != nullptr)
+	{
+		int err = opus_encoder_ctl(encoder, OPUS_SET_BITRATE(bit_rate));
+		if(err < 0)
+		{
+			WARN_PRINT(vformat("failed to set bitrate: %s", opus_strerror(err)));
+		}
+	}
+}
+
+int OpusEncoderNode::get_bit_rate() const
+{
+	return bit_rate;
+}
+
+PackedByteArray OpusEncoderNode::encode(const PackedByteArray &rawPcm)
+{
+	lock_guard<mutex> guard(encoder_mutex);
+
+	PackedByteArray encodedBytes;
 
 	const int numPcmBytes = rawPcm.size();
 
@@ -93,7 +114,7 @@ PoolByteArray OpusEncoderNode::encode(const PoolByteArray rawPcm)
 	const int initialOutputSize = (MAX_PACKET_SIZE * packetsPerSecond * defaultAudioLengthGuessSeconds);
 	encodedBytes.resize(initialOutputSize);
 
-	const unsigned char *pcm_bytes = rawPcm.read().ptr();
+	const unsigned char *pcm_bytes = rawPcm.ptr();
 
 	const int bytesPerSample = pcm_channel_size * channels;
 	const int availableSamples = numPcmBytes / bytesPerSample;
@@ -106,7 +127,7 @@ PoolByteArray OpusEncoderNode::encode(const PoolByteArray rawPcm)
 	{
 		// Clear the input buffer
 		memset(inputSamples, 0, inputSamplesSize*sizeof(opus_int16));
-		
+
 		int curFrameSize;
 		if(remainingSamples >= frame_size)
 		{
@@ -131,20 +152,20 @@ PoolByteArray OpusEncoderNode::encode(const PoolByteArray rawPcm)
 		int opusPacketSize = opus_encode(encoder, inputSamples, frame_size, outBuff, MAX_PACKET_SIZE);
 		if(opusPacketSize < 0)
 		{
-			WARN_PRINT(String("encode failed: {0}!").format(Array::make(opus_strerror(opusPacketSize))));
+			WARN_PRINT(vformat("encode failed: %s!", opus_strerror(opusPacketSize)));
 			break;
 		}
 
 		// Prepend the frame size
 		ensure_buffer_size(encodedBytes, outPos, 4);
-		uint8_t *pbaData = encodedBytes.write().ptr();
+		uint8_t *pbaData = encodedBytes.ptrw();
 		Bytes4 b{opusPacketSize};
 		for(int ii=0; ii<4; ++ii) pbaData[outPos+ii] = b.bytes[ii];
 		outPos += 4;
 
 		// Copy the new data into the output array
 		ensure_buffer_size(encodedBytes, outPos, opusPacketSize);
-		pbaData = encodedBytes.write().ptr(); // We have to get this again incase ensure_buffer_size() resized the buffer
+		pbaData = encodedBytes.ptrw(); // We have to get this again incase ensure_buffer_size() resized the buffer
 		uint8_t *targetArea = &(pbaData[outPos]);
 		memcpy(targetArea, outBuff, opusPacketSize);
 		outPos += opusPacketSize;
@@ -164,13 +185,11 @@ PoolByteArray OpusEncoderNode::encode(const PoolByteArray rawPcm)
 
 
 
-void OpusEncoderNode::_register_methods()
+void OpusEncoderNode::_bind_methods()
 {
-	register_property<OpusEncoderNode, int>("bit_rate", &OpusEncoderNode::bit_rate, DEFAULT_BITRATE);
+	ClassDB::bind_method(D_METHOD("set_bit_rate", "bit_rate"), &OpusEncoderNode::set_bit_rate);
+	ClassDB::bind_method(D_METHOD("get_bit_rate"), &OpusEncoderNode::get_bit_rate);
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "bit_rate"), "set_bit_rate", "get_bit_rate");
 
-	register_method("_init", &OpusEncoderNode::_init);
-	register_method("_ready", &OpusEncoderNode::_ready);
-	register_method("_exit_tree", &OpusEncoderNode::_exit_tree);
-	//register_method("resample_441kh_48kh", &OpusEncoderNode::resample_441kh_48kh);
-	register_method("encode", &OpusEncoderNode::encode);
+	ClassDB::bind_method(D_METHOD("encode", "raw_pcm"), &OpusEncoderNode::encode);
 }
