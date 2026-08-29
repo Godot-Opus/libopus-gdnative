@@ -61,7 +61,8 @@ jobs:
 
       - name: Install Android NDK
         if: matrix.platform == 'android'
-        run: "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;23.2.8568313"
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;23.2.8568313"
 
       - name: Build opus
         shell: bash
