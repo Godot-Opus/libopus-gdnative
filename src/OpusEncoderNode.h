@@ -26,14 +26,19 @@ namespace opus
 		unsigned char outBuff[sizeof(opus_int16) * MAX_PACKET_SIZE];
 
 		/**
-		 * Interleaved stereo float samples accumulated for the streaming path
+		 * Interleaved float samples accumulated for the streaming path.
+		 * Consumed from streamBufferReadPos; the prefix is compacted periodically
+		 * so pops don't pay an O(n) erase every frame.
 		 */
 		std::vector<float> streamBuffer;
+		size_t streamBufferReadPos = 0;
+		bool overflowWarned = false;
 
 		std::mutex encoder_mutex;
 
 		void _init_state();
 		void _free_state();
+		bool _has_full_frame() const;
 
 		/**
 		 * Size of each PCM frame in number of samples

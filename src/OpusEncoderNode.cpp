@@ -8,6 +8,7 @@
 
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/variant.hpp>
+#include <godot_cpp/classes/audio_server.hpp>
 
 #include <cstring>
 
@@ -66,6 +67,13 @@ void OpusEncoderNode::_init_state()
 	{
 		WARN_PRINT(vformat("failed to set bitrate: %s", opus_strerror(err)));
 	}
+
+	// Opus can't represent other rates, so a mismatch silently pitch shifts the audio
+	AudioServer *audio = AudioServer::get_singleton();
+	if(audio != nullptr && (int)audio->get_mix_rate() != sample_rate)
+	{
+		WARN_PRINT(vformat("AudioServer mix rate is %d Hz but the encoder expects %d Hz; captured audio will be pitch shifted. Set audio/driver/mix_rate to match.", (int)audio->get_mix_rate(), sample_rate));
+	}
 }
 
 // Must be called with encoder_mutex held
@@ -81,6 +89,14 @@ void OpusEncoderNode::_free_state()
 	inputSamples = nullptr;
 
 	streamBuffer.clear();
+	streamBufferReadPos = 0;
+	overflowWarned = false;
+}
+
+// Must be called with encoder_mutex held
+bool OpusEncoderNode::_has_full_frame() const
+{
+	return streamBuffer.size() - streamBufferReadPos >= (size_t)(frame_size * channels);
 }
 
 void OpusEncoderNode::_exit_tree()
@@ -271,6 +287,16 @@ void OpusEncoderNode::push_audio(const PackedVector2Array &frames)
 	const int numFrames = frames.size();
 	const Vector2 *in = frames.ptr();
 
+	const size_t maxBufferedFloats = (size_t)MAX_BUFFERED_SAMPLES * channels;
+
+	// Compact the consumed prefix once it grows past the cap; amortized this
+	// costs one erase per cap's worth of audio instead of one per pop
+	if(streamBufferReadPos >= maxBufferedFloats)
+	{
+		streamBuffer.erase(streamBuffer.begin(), streamBuffer.begin() + streamBufferReadPos);
+		streamBufferReadPos = 0;
+	}
+
 	// Per-sample copy so a double precision (REAL_T_IS_DOUBLE) build stays correct
 	streamBuffer.reserve(streamBuffer.size() + numFrames * channels);
 	if(channels == 1)
@@ -291,12 +317,14 @@ void OpusEncoderNode::push_audio(const PackedVector2Array &frames)
 	}
 
 	// Drop the oldest audio if the caller pushes without popping
-	const size_t maxBufferedFloats = (size_t)MAX_BUFFERED_SAMPLES * channels;
-	if(streamBuffer.size() > maxBufferedFloats)
+	if(streamBuffer.size() - streamBufferReadPos > maxBufferedFloats)
 	{
-		const size_t overflow = streamBuffer.size() - maxBufferedFloats;
-		streamBuffer.erase(streamBuffer.begin(), streamBuffer.begin() + overflow);
-		WARN_PRINT("Opus Encoder: stream buffer overflowed, dropping oldest audio");
+		streamBufferReadPos = streamBuffer.size() - maxBufferedFloats;
+		if(!overflowWarned)
+		{
+			WARN_PRINT("Opus Encoder: stream buffer overflowed, dropping oldest audio");
+			overflowWarned = true;
+		}
 	}
 }
 
@@ -305,7 +333,7 @@ bool OpusEncoderNode::has_packet()
 	lock_guard<mutex> guard(encoder_mutex);
 	_init_state();
 
-	return (int)streamBuffer.size() >= frame_size * channels;
+	return _has_full_frame();
 }
 
 PackedByteArray OpusEncoderNode::pop_packet()
@@ -313,21 +341,20 @@ PackedByteArray OpusEncoderNode::pop_packet()
 	lock_guard<mutex> guard(encoder_mutex);
 	_init_state();
 
-	if(encoder == nullptr)
+	if(encoder == nullptr || !_has_full_frame())
 	{
 		return PackedByteArray();
 	}
 
-	const int floatsPerFrame = frame_size * channels;
-	if((int)streamBuffer.size() < floatsPerFrame)
-	{
-		return PackedByteArray();
-	}
-
-	int opusPacketSize = opus_encode_float(encoder, streamBuffer.data(), frame_size, outBuff, MAX_PACKET_SIZE);
+	int opusPacketSize = opus_encode_float(encoder, streamBuffer.data() + streamBufferReadPos, frame_size, outBuff, MAX_PACKET_SIZE);
 
 	// Consume the frame even on failure so a bad frame can't wedge the stream
-	streamBuffer.erase(streamBuffer.begin(), streamBuffer.begin() + floatsPerFrame);
+	streamBufferReadPos += frame_size * channels;
+	if(streamBufferReadPos >= streamBuffer.size())
+	{
+		streamBuffer.clear();
+		streamBufferReadPos = 0;
+	}
 
 	if(opusPacketSize < 0)
 	{
@@ -347,6 +374,8 @@ void OpusEncoderNode::reset_stream()
 	_init_state();
 
 	streamBuffer.clear();
+	streamBufferReadPos = 0;
+	overflowWarned = false;
 
 	if(encoder != nullptr)
 	{

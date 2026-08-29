@@ -29,7 +29,7 @@ namespace opus
 
 		void _init_state();
 		void _free_state();
-		godot::PackedVector2Array _decode_float_packet(const unsigned char *data, int dataSize, int maxFrames);
+		godot::PackedVector2Array _decode_float_packet(const unsigned char *data, int dataSize);
 
 		int sample_rate;
 		int pcm_channel_size;

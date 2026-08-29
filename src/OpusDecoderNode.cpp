@@ -175,7 +175,7 @@ PackedByteArray OpusDecoderNode::decode(const PackedByteArray &opusEncoded)
 		byteMark += 4; // Move past the packet size
 
 		// Very unintelligent sanity check to make sure our packet size header wasn't corrupt
-		if(packetSize <= 0 || packetSize > 2048 || packetSize > numInputBytes - byteMark)
+		if(packetSize <= 0 || packetSize > MAX_PACKET_SIZE || packetSize > numInputBytes - byteMark)
 		{
 			WARN_PRINT("Bad packet size, exiting.");
 			break;
@@ -218,9 +218,12 @@ PackedByteArray OpusDecoderNode::decode(const PackedByteArray &opusEncoded)
 }
 
 // Must be called with decoder_mutex held. data == nullptr runs packet loss concealment
-PackedVector2Array OpusDecoderNode::_decode_float_packet(const unsigned char *data, int dataSize, int maxFrames)
+PackedVector2Array OpusDecoderNode::_decode_float_packet(const unsigned char *data, int dataSize)
 {
 	PackedVector2Array frames;
+
+	// A real packet may hold up to 120ms, but concealment should only guess one frame
+	const int maxFrames = data != nullptr ? max_frame_size : frame_size;
 
 	int out_frame_size = opus_decode_float(decoder, data, dataSize, floatOutBuff, maxFrames, 0);
 	if(out_frame_size < 0)
@@ -267,7 +270,7 @@ PackedVector2Array OpusDecoderNode::decode_frame(const PackedByteArray &packet)
 		return PackedVector2Array();
 	}
 
-	return _decode_float_packet(packet.ptr(), packetSize, max_frame_size);
+	return _decode_float_packet(packet.ptr(), packetSize);
 }
 
 PackedVector2Array OpusDecoderNode::decode_dropped()
@@ -280,7 +283,7 @@ PackedVector2Array OpusDecoderNode::decode_dropped()
 		return PackedVector2Array();
 	}
 
-	return _decode_float_packet(nullptr, 0, frame_size);
+	return _decode_float_packet(nullptr, 0);
 }
 
 void OpusDecoderNode::reset_stream()
