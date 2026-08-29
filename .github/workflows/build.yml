@@ -53,11 +53,15 @@ jobs:
 
       - name: Install mingw
         if: matrix.platform == 'windows'
-        run: sudo apt-get update && sudo apt-get install -y mingw-w64
+        run: |
+          sudo apt-get update && sudo apt-get install -y mingw-w64
+          # std::mutex needs the posix thread model, not ubuntu's win32 default
+          sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
+          sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
 
       - name: Install Android NDK
         if: matrix.platform == 'android'
-        run: sdkmanager --install "ndk;23.2.8568313"
+        run: "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;23.2.8568313"
 
       - name: Build opus
         shell: bash
